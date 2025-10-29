@@ -8,7 +8,7 @@ import scipy
 import emcee as mc
 from matplotlib import pyplot as plt
 
-class Cepheid_Error_Analysis:
+class Cepheid_Chi_Error_Analysis:
     
     def __init__(self, name, period, magnitude, snr, distance):
         """
