@@ -22,4 +22,5 @@ class Astro_Functions:
         """
         t = astropy.time.Time(time, scale='utc', format='iso')
         return t.mjd # astronomers use modified julian date
+    
         

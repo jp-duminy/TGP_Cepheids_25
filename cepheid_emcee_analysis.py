@@ -30,7 +30,7 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
         # likelihood goes as exp(-chi2/2) + const.
         
         return -0.5 * chi_squared + constant # remember ln(exp)
-    
+
     def ln_prior(self, theta):
         """
         Generate priors for the posterior distribution that will be sampled from.
@@ -39,7 +39,7 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
         if -5 < a < 5 and -10 < b < 10: # broad, uninformed priors that take reasonable values 
             return -0.0 # ln(0) = 1, parameter values equally likely
         return -np.inf # prior is outside of expected range
-    
+
     def ln_prob(self, theta):
         """
         Full log-probability function combining the priors and the likelihood.
@@ -48,7 +48,7 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
         if not np.isfinite(lp): # if prior is outside of expected range
             return -np.inf # declare it impossible
         return lp + self.ln_likelihood(theta) # new probability in log space
-    
+
     def walker_initialisation(self, nwalkers, ndim):
         """
         Uses chi-squared result to determine best initial position for walkers.
@@ -59,7 +59,7 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
         starting_position = pos + 1e-4 * np.random.randn(nwalkers, ndim) # add gaussian noise
         
         return starting_position
-    
+
     def run_mcmc(self):
         """
         Run the emcee Monte Carlo Markov Chain.
@@ -67,23 +67,23 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
         ndim = 2 # number of dimensions
         nwalkers = 32 # numbers of walkers to explore parameter space
         initial_guess = [2.43, 4.05] # from Benedict et al. (2007)
-        
+
         pos = self.walker_initialisation(nwalkers, ndim)
-        
+
         sampler = mc.EnsembleSampler(nwalkers, ndim, self.ln_prob) # sample the distribution
-        
+
         print(f"Running burn-in...")
         pos = sampler.run_mcmc(pos, 100) # let walkers explore parameter space
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
-        
+
         print(f"Running production...")
         sampler.run_mcmc(pos, 5000, progress=True) # run main chain
-        
+
         self.sampler = sampler # keep sampler for analysis of quality of chain
         return sampler
-    
+
     def parameter_time_series(self):
         """
         Plots the parameter time series to analyse how long it takes walkers to explore
@@ -99,7 +99,7 @@ class Cepheid_MCMC(Cepheid_Chi_Error_Analysis):
             ax.set_xlim(0, len(samples))
             ax.set_ylabel(labels[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
-            axes[-1].set_xlabel("Step Number");
+            axes[-1].set_xlabel("Step Number")
 
     def plot_corner(self, truths):
         """
