@@ -10,7 +10,6 @@ from matplotlib import pyplot as plt
 import astropy
 from p_l_relation_chisqu import Cepheid_Chi_Error_Analysis
 from general_functions import Astro_Functions
-import emcee
 import corner
 
 class Cepheid_Period_Finder:
@@ -41,26 +40,72 @@ class Cepheid_Period_Finder:
         ax.set_title(f"Light Curve for Cepheid {self.name}")
         plt.show()
 
-    def sinusoid_model(self, t, amplitude, frequency, phase, offset):
+    def sinusoid_model(self, t, amplitude, phase, offset, frequency):
         """
         Sinusoid fitting function.
         """
         return amplitude * np.sin(2 * np.pi * frequency * (t - phase)) + offset
     
+    def chi_sq(self, theta, period):
+        """
+        Chi-square function taking period as an argument so period may be iterated over.
+        """
+        a, p, o = theta
+        f = 1 / period
+        M_model = self.sinusoid_model(self.time, a, p, o, f)
+
+        chisq = np.sum(((self.magnitude - M_model) / self.magnitude_error)**2)
+
+        return chisq, M_model
+
     def fit_sinusoid(self):
         """
-        Fit a sinusoid to the data and estimate the best-fit parameters using chi-squares.
+        Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
+        other free parameters. Returns chisqu plot for period range and best-fit parameters.
         """
-        parameters, cov = scipy.optimize.curve_fit(self.sinusoid_model, self.time, self.magnitude, 
+        p_min = 1.49107 # days, Breger (1980)
+        p_max = 78.14 # days, Soszyński et al. (2024)
+        period_range = np.linspace(p_min, p_max, 100)
+
+        chisqu = []
+        params = []
+
+        for p in period_range:
+            # define a rough initial guess
+            a0 = (np.max(self.magnitude) - np.min(self.magnitude)) / 2 
+            p0 = 0.0
+            o0 = np.median(self.magnitude)
+            theta = [a0, p0, o0]
+            frequency = 1 / period
+                
+            params, cov = scipy.optimize.curve_fit(lambda t, a, p, o: self.sinusoid_model(t, a, p, o, frequency), 
+                                                   self.time, self.magnitude, theta, 
                                                    sigma=self.magnitude_error, absolute_sigma=True)
-        uncertainties = np.sqrt(np.diag(cov))
+            
+            chisqu.append(result.fun)
+            params.append(result.x)
+
+        fig, ax = plt.subplots()
+        ax.plot(period_range, chisq)
+        ax.set_xlabel('Period [days]')
+        ax.set_ylabel(f"$\chi^2$")
+        ax.set_title(f"$\chi^2$ value for period range")
+        plt.show()
+
+        best_period_index = np.argmin(chisqu)
+        best_chisqu_period = period_range[best_period_index]
+        best_chisqu_params = params[best_period_index]
+
+        print(f"Best period: {best_chisqu_period}")
+
         print(f"Best-fit parameters:")
-        for i in range(len(parameters)):
-            print(f"{parameters[i]} \u00B1 {uncertainties[i]}")
+        for i in range(len(best_chisqu_params)):
+            print(f"{best_chisqu_params[i]} \u00B1 {uncertainties[i]}")
 
-        self.a0, self.f0, self.p0, self.o0 = parameters
+        self.a0, self.p0, self.o0 = best_chisqu_params
+        self.f0 = 1 / best_chisqu_period
 
-        return parameters, uncertainties
+        return best_chisqu_period, best_chisqu_params
     
     def plot_sinusoid_fit(self):
         """
