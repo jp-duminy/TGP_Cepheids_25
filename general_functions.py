@@ -1,16 +1,15 @@
 import numpy as np
-import scipy
-import astropy
+from astropy.time import Time
 
 class Astro_Functions:
 
-    def magnitude_error(snr: int):
+    def magnitude_error(snr: float):
         """
         Compute error on magnitudes.
         """
         return (2.5 / np.log(10)) * (1 / snr)
 
-    def apparent_to_absolute(magnitude: int, distance: int):
+    def apparent_to_absolute(magnitude: float, distance: float):
         """
         Convert apparent magnitudes to absolute magnitudes.
         """
@@ -20,7 +19,8 @@ class Astro_Functions:
         """
         Converts ISO times to MJD for ease of use.
         """
-        t = astropy.time.Time(time, scale='utc', format='iso')
+        time_array = np.array(time)
+        t = Time(time_array, scale='utc', format='isot')
         return t.mjd # astronomers use modified julian date
     
         

@@ -57,3 +57,36 @@
         self.a0, self.f0, self.p0, self.o0 = parameters
 
 """
+
+"""
+Sinusoid construction
+        for period in period_range:
+            # define a rough initial guess
+            a0 = (np.max(self.magnitude) - np.min(self.magnitude)) / 2 
+            p0 = 0.0
+            o0 = np.median(self.magnitude)
+            theta = [a0, p0, o0]
+            frequency = 1 / period
+            print(f"Running curve fit...")
+            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, o: self.sinusoid_model(t, a, p, o, frequency), 
+                                                   self.time, self.magnitude, p0=theta, 
+                                                   sigma=self.magnitude_error, absolute_sigma=True)
+            
+            print(f"Test")
+            
+            param_vals.append(parameters)
+            uncertainties = np.sqrt(np.diag(cov))
+            param_uncertainties.append(uncertainties)
+
+            chisqu = self.sine_chi_sq(parameters, period)
+            chisqu_vals.append(chisqu)
+
+
+"""
+
+"""
+Emcee parameter extraction
+
+a0, p0, o0, f0 = np.mean(self.flat_samples, axis=0)
+
+"""
