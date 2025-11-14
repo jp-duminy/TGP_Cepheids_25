@@ -17,7 +17,8 @@ class Sinusoid_Period_Finder:
         Initialise cepheid parameters relevant to period fitting.
         """
         self.name = name
-        self.time = Astro_Functions.modified_julian_date_converter(np.array(time)) # convert ISO to MJD
+        self.mjd_time = Astro_Functions.modified_julian_date_converter(np.array(time)) # convert ISO to MJD
+        self.time = self.mjd_time - self.mjd_time[0]
         self.magnitude = magnitude
         self.magnitude_error = magnitude_error
         
@@ -27,10 +28,9 @@ class Sinusoid_Period_Finder:
         """
         print(f"Printing light curve")
         fig, ax = plt.subplots()
-        t = self.time - self.time[0] # start x axis at t=0 for clarity
         
-        ax.errorbar(t, self.magnitude, yerr=self.magnitude_error, fmt='o')
-        ax.set_xlabel('Time [Days]')
+        ax.errorbar(self.mjd_time, self.magnitude, yerr=self.magnitude_error, fmt='o')
+        ax.set_xlabel('Time [MJD]')
         ax.set_ylabel('Corrected Magnitude')
         ax.set_title(self.name)
         ax.invert_yaxis() # brighter -> lower magnitude
@@ -43,7 +43,7 @@ class Sinusoid_Period_Finder:
         """
         Sinusoid fitting function.
         """
-        return amplitude * np.sin(2 * np.pi * frequency * (t - phase)) + offset
+        return amplitude * np.sin((2 * np.pi * frequency * t) + phase) + offset
     
     def sine_chi_sq(self, theta, period):
         """
@@ -103,7 +103,7 @@ class Sinusoid_Period_Finder:
 
         print(f"Best period: {best_chisqu_period} \n with $\chi^2$ value of {best_chisqu}")
 
-        print(f"Best-fit parameters:")
+        print(f"Best-fit chi square parameters:")
         for i in range(len(best_chisqu_params)):
             print(f"{best_chisqu_params[i]} \u00B1 {best_chisqu_uncertainties[i]}")
 
@@ -111,24 +111,25 @@ class Sinusoid_Period_Finder:
         self.f0 = 1 / best_chisqu_period
 
         return best_chisqu_period, best_chisqu_params
-    
+
     def plot_sinusoid_fit(self):
         """
         Overplot the modelled data from curve_fit onto the data.
         """
         fig, ax = plt.subplots()
-        y = self.sinusoid_model(self.time, self.a0, self.p0, self.o0, self.f0)
+        x = np.linspace(self.time.min(), self.time.max(), 100)
+        y = self.sinusoid_model(x, self.a0, self.p0, self.o0, self.f0)
         ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
         ax.set_title(self.name)
-        ax.plot(self.time, y, label='Modelled Data')
+        ax.plot(x, y, label='Modelled Data')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
         ax.set_title(f"Sinusoidal $\chi^2$ Fit for Cepheid {self.name}")
 
         plt.show()
-    
+
     def sine_ln_likelihood(self, theta):
         """
         Log-likelihood function that takes a parameter vector as its input and returns the log-likelihood.
@@ -146,12 +147,12 @@ class Sinusoid_Period_Finder:
         Generate priors for the posterior distribution that will be sampled from.
         """
         a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0)
-        p_min, p_max = self.p0 - 2*abs(self.p0), self.p0 + 2*abs(self.p0)
+        p_min, p_max = -1 * np.pi, np.pi
         o_min, o_max = self.o0 - 2*abs(self.o0), self.o0 + 2*abs(self.o0)
         f_min, f_max = 0.75 * self.f0,  1.25 * self.f0 # frequency can't be negative
 
         a, p, o, f = theta
-        
+
         if (a_min < a < a_max and
             f_min < f < f_max and
             p_min < p < p_max and
@@ -159,7 +160,7 @@ class Sinusoid_Period_Finder:
             return 0.0
         else:
             return -np.inf
-        
+
     def sine_ln_prob(self, theta):
         """
         Full log-probability function combining the priors and the likelihood.
@@ -176,9 +177,9 @@ class Sinusoid_Period_Finder:
         pos = np.array([self.a0, self.p0, self.o0, self.f0]) # stitch into parameter vector
         
         starting_position = pos + 1e-2 * np.random.randn(nwalkers, ndim) # add gaussian noise
-        
+
         return starting_position
-    
+
     def sine_run_mcmc(self):
         """
         Run the emcee Monte Carlo Markov Chain.
@@ -237,7 +238,7 @@ class Sinusoid_Period_Finder:
             )
         plt.title('Sinusoidal Emcee Fit Corner Plot')
         plt.show()
-    
+
     def sine_plot_emcee_fit(self):
         """
         Plot the model returned by emcee.
@@ -247,12 +248,14 @@ class Sinusoid_Period_Finder:
         a0, p0, o0, f0 = self.flat_samples[best_index]
 
         fig, ax = plt.subplots()
-        y = self.sinusoid_model(self.time, a0, p0, o0, f0)
+
+        x = np.linspace(self.time.min(), self.time.max(), 100)
+        y = self.sinusoid_model(x, a0, p0, o0, f0)
+
         ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.set_title(self.name)
-        ax.plot(self.time, y, label='Modelled Data')
+        ax.plot(x, y, label='Modelled Data')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
         ax.set_title(f"Emcee Sinusoid Fit for Cepheid {self.name}")
@@ -262,13 +265,3 @@ class Sinusoid_Period_Finder:
         best_period = 1 / f0
 
         return best_period
-
-
-
-
-    
-        
-
-        
-        
-        
