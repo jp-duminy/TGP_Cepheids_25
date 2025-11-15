@@ -71,7 +71,7 @@ class Cepheid_Chi_Error_Analysis:
         """
         Generate contour plots of chi-square fit; displays minimised values.
         """
-        a, b, minimised_chi2 = self.minimise_chi_square()
+        a, b, _ = self.minimise_chi_square()
         
         a_vals = np.linspace(a-0.5, a+0.5, 100)
         b_vals = np.linspace(b-0.5, b+0.5, 100)

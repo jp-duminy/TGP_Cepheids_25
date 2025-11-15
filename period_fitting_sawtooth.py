@@ -67,7 +67,6 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
             chisqu = self.chi_sq(parameters, period)
             chisqu_vals.append(chisqu)
 
-
         fig, ax = plt.subplots()
         ax.plot(period_range, chisqu_vals)
         ax.set_xlabel('Period [days]')

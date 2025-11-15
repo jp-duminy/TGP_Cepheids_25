@@ -22,5 +22,3 @@ class Astro_Functions:
         time_array = np.array(time)
         t = Time(time_array, scale='utc', format='isot')
         return t.mjd # astronomers use modified julian date
-    
-        

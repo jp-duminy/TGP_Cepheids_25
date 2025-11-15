@@ -10,14 +10,15 @@ from matplotlib import pyplot as plt
 from general_functions import Astro_Functions
 import corner
 
+
 class Sinusoid_Period_Finder:
     
-    def __init__(self, name, time: float, magnitude: float, magnitude_error: float):
+    def __init__(self, name: str, time: float, magnitude: float, magnitude_error: float):
         """
         Initialise cepheid parameters relevant to period fitting.
         """
         self.name = name
-        self.mjd_time = Astro_Functions.modified_julian_date_converter(np.array(time)) # convert ISO to MJD
+        self.mjd_time = Astro_Functions.modified_julian_date_converter(np.array(time)) # convert ISOT to MJD
         self.time = self.mjd_time - self.mjd_time[0]
         self.magnitude = magnitude
         self.magnitude_error = magnitude_error
@@ -26,32 +27,33 @@ class Sinusoid_Period_Finder:
         """
         Plot the light curve of each cepheid variable.
         """
-        print(f"Printing light curve")
         fig, ax = plt.subplots()
         
-        ax.errorbar(self.mjd_time, self.magnitude, yerr=self.magnitude_error, fmt='o')
+        ax.errorbar(self.mjd_time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
+                    label=self.name, color='black', capsize=5)
         ax.set_xlabel('Time [MJD]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.set_title(self.name)
+        ax.set_title(f"Light Curve for Cepheid {self.name}")
+        ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
 
-        ax.set_title(f"Light Curve for Cepheid {self.name}")
-        print(f"Graph test.")
         plt.show()
 
-    def sinusoid_model(self, t, amplitude, phase, offset, frequency):
+    def sinusoid_model(self, t, amplitude, phase, midline, frequency): # frequency at end so it can be held fixed
         """
-        Sinusoid fitting function.
+        Returns a sinusoid with four free parameters.
         """
-        return amplitude * np.sin((2 * np.pi * frequency * t) + phase) + offset
+        return amplitude * np.sin((2 * np.pi * frequency * t) + phase) + midline
     
-    def sine_chi_sq(self, theta, period):
+    # chi-squares fitting functions
+
+    def sine_chi_sq(self, theta: list, period: float):
         """
         Chi-square function taking period as an argument so period may be iterated over.
         """
-        a, p, o = theta
-        f = 1 / period
-        M_model = self.sinusoid_model(self.time, a, p, o, f)
+        a, p, m = theta # free parameters
+        f = 1 / period # messy conversion but literature data is in periods
+        M_model = self.sinusoid_model(self.time, a, p, m, f)
 
         chisq = np.sum(((self.magnitude - M_model) / self.magnitude_error)**2)
 
@@ -60,123 +62,197 @@ class Sinusoid_Period_Finder:
     def fit_sinusoid(self):
         """
         Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
-        other free parameters. Returns chisqu plot for period range and best-fit parameters.
+        other free parameters. Returns best-fit parameters, stores periods and corresponding chi square values.
         """
         p_min = 1.49107 # days, Breger (1980)
         p_max = 78.14 # days, Soszyński et al. (2024)
-        period_range = np.linspace(p_min, p_max, 1000)
+        self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
-        chisqu_vals = []
+        self.chisqu_vals = []
         param_vals = []
         param_uncertainties = []
 
-        for period in period_range:
-            # define a rough initial guess
+        # hold period fixed and fit other parameters
+        for period in self.period_range:
+            # define a very rough initial guess
             a0 = (np.max(self.magnitude) - np.min(self.magnitude)) / 2 
             p0 = 0.0
-            o0 = np.median(self.magnitude)
-            theta = [a0, p0, o0]
+            m0 = np.median(self.magnitude)
+            theta = [a0, p0, m0]
             frequency = 1 / period
-            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, o: self.sinusoid_model(t, a, p, o, frequency), 
+            # lambda function allows period to be held fixed
+            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, m: self.sinusoid_model(t, a, p, m, frequency), 
                                                    self.time, self.magnitude, p0=theta, 
                                                    sigma=self.magnitude_error, absolute_sigma=True)
 
             param_vals.append(parameters)
-            uncertainties = np.sqrt(np.diag(cov))
+            uncertainties = np.sqrt(np.diag(cov)) # uncertainties are square root of covariance matrix diagonals
             param_uncertainties.append(uncertainties)
 
             chisqu = self.sine_chi_sq(parameters, period)
-            chisqu_vals.append(chisqu)
+            self.chisqu_vals.append(chisqu)
 
-        fig, ax = plt.subplots()
-        ax.plot(period_range, chisqu_vals)
-        ax.set_xlabel('Period [days]')
-        ax.set_ylabel(f"$\chi^2$")
-        ax.set_title(f"$\chi^2$ value for period range")
-        plt.show()
-
-        best_period_index = np.argmin(chisqu_vals)
-        best_chisqu_period = period_range[best_period_index]
+        # extract best fit parameters and uncertainties
+        best_period_index = np.argmin(self.chisqu_vals)
+        best_chisqu_period = self.period_range[best_period_index]
         best_chisqu_params = param_vals[best_period_index]
         best_chisqu_uncertainties = param_uncertainties[best_period_index]
-        best_chisqu = chisqu_vals[best_period_index]
+        best_chisqu = self.chisqu_vals[best_period_index]
 
-        print(f"Best period: {best_chisqu_period} \n with $\chi^2$ value of {best_chisqu}")
-
-        print(f"Best-fit chi square parameters:")
-        for i in range(len(best_chisqu_params)):
-            print(f"{best_chisqu_params[i]} \u00B1 {best_chisqu_uncertainties[i]}")
-
-        self.a0, self.p0, self.o0 = best_chisqu_params
+        self.a0, self.p0, self.m0 = best_chisqu_params
         self.f0 = 1 / best_chisqu_period
 
-        return best_chisqu_period, best_chisqu_params
-
+        return best_chisqu_period, best_chisqu_params, best_chisqu_uncertainties, best_chisqu
+    
     def plot_sinusoid_fit(self):
         """
         Overplot the modelled data from curve_fit onto the data.
         """
+
+        # diagnostic plot to analyse curve fitting quality
         fig, ax = plt.subplots()
+        ax.plot(self.period_range, self.chisqu_vals, label=f"$\chi^2$", color='r')
+        ax.legend()
+        ax.set_xlabel('Period [days]')
+        ax.set_ylabel(f"$\chi^2$ Value")
+        ax.set_title(f"$\chi^2$ value for period range")
+        plt.show()
+        
+        # overplot model onto original light curve
+        fig, ax = plt.subplots()
+
+        # generate data to visualise the fit
         x = np.linspace(self.time.min(), self.time.max(), 100)
-        y = self.sinusoid_model(x, self.a0, self.p0, self.o0, self.f0)
-        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
+        y = self.sinusoid_model(x, self.a0, self.p0, self.m0, self.f0)
+
+        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
+                    label='Original Data', color='black', capsize=5)
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.set_title(self.name)
-        ax.plot(x, y, label='Modelled Data')
+        ax.plot(x, y, label='Least-Squares Model', color='r')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
-        ax.set_title(f"Sinusoidal $\chi^2$ Fit for Cepheid {self.name}")
+        ax.set_title(f"Least-Squares Sinusoid Fit for Cepheid {self.name}")
 
         plt.show()
 
+    def sine_chisqu_contour_plot(self):
+        """
+        Plots a colour-mapped contour plot for the three free parameters in the chi-squares fit.
+        Currently somewhat computationally expensive.
+        """
+        period, best_params, best_uncertainties, chisqu_min = self.fit_sinusoid()
+        a0, p0, m0 = best_params
+        a0_err, p0_err, o0_err = best_uncertainties
+        a_vals = np.linspace(a0 - 0.5, a0 + 0.5, 100)
+        p_vals = np.linspace(p0 - (0.25 * np.pi), p0 + (0.25 * np.pi), 100)
+        o_vals = np.linspace(m0 - 0.5, m0 + 0.5, 100)
+
+        # create 3D array of chi-square values
+        chisqu_grid = np.array([[[self.sine_chi_sq([a, p, m], period) for a in a_vals]
+                                  for p in p_vals] for m in o_vals])
+        
+        # since we made a linspace we find the closest value
+        i = np.argmin(np.abs(a_vals - a0))
+        j = np.argmin(np.abs(p_vals - p0))
+        k = np.argmin(np.abs(o_vals - m0))
+        
+        # slice array into 2D for plot
+        chisqu_a_p = chisqu_grid[k, :, :]
+        chisqu_a_o = chisqu_grid[:, j, :]
+        chisqu_p_o = chisqu_grid[:, :, i]
+
+        # confidence intervals 1σ, 2σ, 3σ (see workshop 3)
+        levels = [chisqu_min + 2.30,
+          chisqu_min + 6.17,
+          chisqu_min + 11.8]
+
+        fig, axes = plt.subplots(1, 3)
+
+        # amplitude vs phase
+        ax = axes[0]
+        cp = ax.contour(a_vals, p_vals, chisqu_a_p, levels=levels, colors='white') # white for cmap contrast
+        im = ax.imshow(chisqu_a_p.T, origin='lower', extent=[a_vals[0], a_vals[-1], p_vals[0], p_vals[-1]],
+                   aspect='auto', cmap='viridis', alpha=0.7) # .T transposes array (imshow syntax)
+        ax.set_title(f"Amplitude vs Phase  (Midline={m0:.3f} \u00B1 {o0_err:.3f})")
+        ax.set_xlabel("Amplitude [Mag]")
+        ax.set_ylabel("Phase [Rad]")
+        fig.colorbar(im, ax=ax, label='$\chi^2$') # add colour bar for chi-square values
+
+        # amplitude vs midline
+        ax = axes[1]
+        cp = ax.contour(a_vals, o_vals, chisqu_a_o, levels=levels, colors='white')
+        im = ax.imshow(chisqu_a_o.T, origin='lower', extent=[a_vals[0], a_vals[-1], o_vals[0], o_vals[-1]],
+                aspect='auto', cmap='viridis', alpha=0.7)
+        ax.set_title(f"Amplitude vs Midline  (Phase={p0:.3f} \u00B1 {p0_err:.3f})")
+        ax.set_xlabel("Amplitude [Mag]")
+        ax.set_ylabel("Midline [Mag]")
+        fig.colorbar(im, ax=ax, label='$\chi^2$')
+
+        # phase vs midline
+        ax = axes[2]
+        cp = ax.contour(p_vals, o_vals, chisqu_p_o, levels=levels, colors='white')
+        im = ax.imshow(chisqu_p_o.T, origin='lower', extent=[p_vals[0], p_vals[-1], o_vals[0], o_vals[-1]],
+                aspect='auto', cmap='viridis', alpha=0.7)
+        ax.set_title(f"Phase vs Midline  (Amplitude={a0:.3f} \u00B1 {a0_err:.3f})")
+        ax.set_xlabel("Phase [Rad]")
+        ax.set_ylabel("Midline [Mag]")
+        fig.colorbar(im, ax=ax, label='$\chi^2$')
+
+        fig.subplots_adjust(wspace=0.4, hspace=0.3)
+        plt.show()
+
+    # emcee fitting functions
+
     def sine_ln_likelihood(self, theta):
         """
-        Log-likelihood function that takes a parameter vector as its input and returns the log-likelihood.
-        The likelihood function is the probability of the dataset given the parameters.
+        The likelihood function is the probability of observing the data given the model parameters.
+        Emcee works in log of parameter space, so we define the ln-likelihood function.
+        This function takes a parameter vector [a, p, m, f] and returns the ln-likelihood.
         """
-        a, p, o, f = theta
-        modelled_magnitude = self.sinusoid_model(self.time, a, p, o, f)
+        a, p, m, f = theta
+        modelled_magnitude = self.sinusoid_model(self.time, a, p, m, f)
         residuals = self.magnitude - modelled_magnitude
-        constant = np.log(2 * np.pi * self.magnitude_error**2)
+        constant = np.log(2 * np.pi * self.magnitude_error**2) # constant term added for completeness
 
         return -0.5 * np.sum((residuals / self.magnitude_error)**2 + constant)
 
     def sine_ln_prior(self, theta):
         """
-        Generate priors for the posterior distribution that will be sampled from.
+        Generate flat, physically-bounded priors in parameter space.
         """
-        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0)
-        p_min, p_max = -1 * np.pi, np.pi
-        o_min, o_max = self.o0 - 2*abs(self.o0), self.o0 + 2*abs(self.o0)
+        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0) # range is currently quite large
+        p_min, p_max = -1 * np.pi, np.pi # explores all of phase space
+        m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0) # also quite large
         f_min, f_max = 0.75 * self.f0,  1.25 * self.f0 # frequency can't be negative
 
-        a, p, o, f = theta
+        a, p, m, f = theta
 
         if (a_min < a < a_max and
             f_min < f < f_max and
             p_min < p < p_max and
-            o_min < o < o_max):
-            return 0.0
+            m_min < m < m_max):
+            return 0.0 # ln(0) = 1: flat prior, all values are equally likely
         else:
-            return -np.inf
+            return -np.inf # prior is also bounded to physical region of parameter space
 
     def sine_ln_prob(self, theta):
         """
-        Full log-probability function combining the priors and the likelihood.
+        Implementation of Bayes' theorem in log-space; starts with the prior belief, computes the
+        likelihood, then returns the posterior, the updated belief.
         """
         lp = self.sine_ln_prior(theta)
-        if not np.isfinite(lp): # if prior is outside of expected range
+        if not np.isfinite(lp): # if prior is outside of physical range
             return -np.inf # declare it impossible
-        return lp + self.sine_ln_likelihood(theta) # new probability in log space
+        return lp + self.sine_ln_likelihood(theta) # otherwise update and return log of posterior
 
     def sine_walker_initialisation(self, nwalkers, ndim):
         """
         Uses chi-squared result to determine best initial position for walkers.
         """
-        pos = np.array([self.a0, self.p0, self.o0, self.f0]) # stitch into parameter vector
+        pos = np.array([self.a0, self.p0, self.m0, self.f0]) # stitch into parameter vector
         
-        starting_position = pos + 1e-2 * np.random.randn(nwalkers, ndim) # add gaussian noise
+        starting_position = pos + 1e-2 * np.random.randn(nwalkers, ndim) # sprinkle gaussian noise
 
         return starting_position
 
@@ -191,16 +267,46 @@ class Sinusoid_Period_Finder:
 
         sampler = mc.EnsembleSampler(nwalkers, ndim, self.sine_ln_prob) # sample the distribution
 
-        print(f"Running burn-in for cepheid...")
-        pos = sampler.run_mcmc(pos, 100) # let walkers explore parameter space
+        # first allow walkers to explore parameter space
+        print(f"Running burn-in for {self.name}...")
+        pos = sampler.run_mcmc(pos, 100) # small burn-in of 100 steps
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
+        # with walkers settled in, run the main chain
         print(f"Running production...")
-        sampler.run_mcmc(pos, 10000, progress=True) # run main chain
+        sampler.run_mcmc(pos, 10000, progress=True) # progress=True generates a progress bar
 
         self.sampler = sampler # keep sampler for analysis of quality of chain
-        return sampler
+
+        try:
+            tau = self.sampler.get_autocorr_time()
+            thin = int(np.mean(tau) / 2) # thinning helps speed up computing
+        except mc.autocorr.AutocorrError:
+            print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
+            thin = 10 
+        self.thin = thin
+        self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
+
+        quantiles = [0.025, 0.5, 0.975]  # 0.025-0.975 is ~ 2σ gaussian error
+        lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
+
+        # the median (0.5) summarises the central tendency of the posterior distribution
+        self.mc_a0, self.mc_p0, self.mc_m0, self.mc_f0 = median
+
+        # compute errors from quartiles
+        self.mc_a0_err = (upper[0] - median[0], median[0] - lower[0])
+        self.mc_p0_err = (upper[1] - median[1], median[1] - lower[1])
+        self.mc_m0_err = (upper[2] - median[2], median[2] - lower[2])
+        self.mc_f0_err = (upper[3] - median[3], median[3] - lower[3])
+
+        errors = (upper - median, median - lower)
+
+        log_prob = self.sampler.get_log_prob(thin=self.thin, flat=True)
+        best_index = np.argmax(log_prob)
+        a0, p0, o0, f0 = self.flat_samples[best_index]
+        
+        return median, errors, tau, f0
 
     def sine_parameter_time_series(self):
         """
@@ -210,10 +316,10 @@ class Sinusoid_Period_Finder:
         ndim = 4
         fig, axes = plt.subplots(4, figsize=(10, 7), sharex=True)
         samples = self.sampler.get_chain()
-        labels = ["Amplitude", "Phase", "Offset", "Frequency"]
+        labels = ["Amplitude", "Phase", "Midline", "Frequency"]
         for i in range(ndim):
             ax = axes[i]
-            ax.plot(samples[:, :, i], "k", alpha=0.3)
+            ax.plot(samples[:, :, i], "k", alpha=0.3) # low opacity so we can see walker paths clearly
             ax.set_xlim(0, len(samples))
             ax.set_ylabel(labels[i])
             ax.yaxis.set_label_coords(-0.1, 0.5)
@@ -223,45 +329,30 @@ class Sinusoid_Period_Finder:
         """
         First diagnostic plot: corner plot to analyse quality of fit.
         """
-        try:
-            tau = self.sampler.get_autocorr_time()
-            thin = int(np.mean(tau) / 2)
-        except mc.autocorr.AutocorrError:
-            print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
-            thin = 10 
-        self.thin = thin
-        self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
-        
-        labels = ["Amplitude", "Phase", "Offset", "Frequency"]
+        labels = ["Amplitude", "Phase", "Midline", "Frequency"]
         fig = corner.corner(
-            self.flat_samples, labels=labels
-            )
-        plt.title('Sinusoidal Emcee Fit Corner Plot')
+            self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
+            quantiles = [0.025, 0.5, 0.975] # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
+            ) 
         plt.show()
 
     def sine_plot_emcee_fit(self):
         """
         Plot the model returned by emcee.
         """
-        log_prob = self.sampler.get_log_prob(thin=self.thin, flat=True)
-        best_index = np.argmax(log_prob)
-        a0, p0, o0, f0 = self.flat_samples[best_index]
-
         fig, ax = plt.subplots()
 
+        # generate some plotting data
         x = np.linspace(self.time.min(), self.time.max(), 100)
-        y = self.sinusoid_model(x, a0, p0, o0, f0)
+        y = self.sinusoid_model(x, self.mc_a0, self.mc_p0, self.mc_m0, self.mc_f0)
 
-        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
+        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
+                    label='Original Data', color='black', capsize=5)
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.plot(x, y, label='Modelled Data')
+        ax.plot(x, y, label='Modelled Data', color='r')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
         ax.set_title(f"Emcee Sinusoid Fit for Cepheid {self.name}")
 
         plt.show()
-
-        best_period = 1 / f0
-
-        return best_period
