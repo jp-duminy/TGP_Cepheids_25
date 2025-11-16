@@ -7,6 +7,7 @@ import numpy as np
 import scipy
 import emcee as mc
 from matplotlib import pyplot as plt
+from general_functions import Astro_Functions
 
 class Cepheid_Chi_Error_Analysis:
     
@@ -24,13 +25,13 @@ class Cepheid_Chi_Error_Analysis:
         """
         Convert apparent magnitudes to absolute magnitudes.
         """
-        return self.magnitude - (5 * np.log10(self.distance / 10))
+        return Astro_Functions.apparent_to_absolute(self.magnitude, self.distance)
         
     def magnitude_error(self):
         """
         Compute error on magnitudes.
         """
-        return (2.5 / np.log(10)) * (1 / self.snr)
+        return Astro_Functions.magnitude_error(self.snr)
     
     def model(self, a, b):
         """
@@ -70,7 +71,7 @@ class Cepheid_Chi_Error_Analysis:
         """
         Generate contour plots of chi-square fit; displays minimised values.
         """
-        a, b, minimised_chi2 = self.minimise_chi_square()
+        a, b, _ = self.minimise_chi_square()
         
         a_vals = np.linspace(a-0.5, a+0.5, 100)
         b_vals = np.linspace(b-0.5, b+0.5, 100)
