@@ -138,11 +138,11 @@ class Aperture_Photometry:
         inst_mag = -2.5 * np.log10(counts).item()
         return inst_mag 
     
-    def get_snr(self, target_counts, aperture_area, sky_counts, sky_ann_area, 
+    def get_inst_mag_error(self, target_counts, aperture_area, sky_counts, sky_ann_area, 
                 gain = None, exp_time = None, read_noise = None, stack_size = None):
 
-        """Compute SNR of instrumental magnitude using a revised CCD equation taken
-        from Handbook of CCD Astronomy by Howell.
+        """Compute uncertainty of instrumental magnitude using a revised CCD equation 
+        for the SNR taken from Handbook of CCD Astronomy by Howell.
 
         NB: Assumes that sky background uncertainty follows Poisson stats,
         and that the dark current is negligable.
@@ -160,8 +160,10 @@ class Aperture_Photometry:
 
         snr = signal / noise
         snr = snr.item()
-        return snr
+        error = 1.086 / snr
+        return error
     
+
     
 
     
