@@ -8,12 +8,10 @@ import astropy.io.fits as fits
 import astropy.wcs as wcs
 import matplotlib.pyplot as plt
 
-class Aperture_Photometry: 
+class AperturePhotometry: 
 
     """A class to perform basic aperture photometry on a dataset, up to and
     including determining the instrumental magnitude of a target."""
-
-    """AS OF 10/11/25, NO MECHANISM TO NORMALISE FLUXES TO CTS PER SECOND"""
 
     def __init__(self, filename, hdu_index = 1): 
 
@@ -25,7 +23,7 @@ class Aperture_Photometry:
 
         with fits.open(filename) as hdul:
             data = hdul[0].data
-            header = hdul[0].data 
+            header = hdul[0].header 
 
         if data.ndim != 2:
             raise ValueError(f"The image is {data.ndim}D, not 2D")
@@ -33,8 +31,9 @@ class Aperture_Photometry:
         data = data.astype(float)
         data = np.nan_to_num(data)
 
-        self.data = data
         self.header = header
+        #Normalise to cts per second
+        self.data = data / float(header["EXPTIME"])
 
     def get_pixel_coords(self, WCS, RA, Dec, origin = 0):
         """Converts world coordinates of targets (RA, Dec) to pixel coordinates (x, y). 
