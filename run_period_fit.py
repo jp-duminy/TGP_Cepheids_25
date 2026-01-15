@@ -1,5 +1,6 @@
 import pandas as pd
 from period_fitting_sinusoid import Sinusoid_Period_Finder
+from period_fitting_sawtooth import Sawtooth_Period_Finder
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -21,7 +22,7 @@ finder = Sinusoid_Period_Finder(
 )
 
 
-class Finder(Sinusoid_Period_Finder):
+class Finder(Sinusoid_Period_Finder, Sawtooth_Period_Finder):
 
     def __init__(self, name, time, magnitude, magnitude_error):
         super().__init__(name, time, magnitude, magnitude_error)
@@ -31,6 +32,20 @@ class Finder(Sinusoid_Period_Finder):
             magnitude=df["Magnitude"].values,
             magnitude_error=df["Magnitude Error"].values,
         )
+
+    def bayesian_information_criterion(self, chisqu, n_params):
+        """
+        Computes the Bayesian Information Criterion, defined as BIC = kln(n) - 2ln(L).
+        k = number of parameters; n = number of datapoints; L = maximised value of likelihood function
+        Since ln(L) = -0.5*chisqu, -2ln(L) = chisqu
+        So BIC = chisqu + kln(n)
+        """
+        n = len(self.magnitude) # number of datapoints
+
+        return chisqu + n_params * np.log(n)
+    
+    def compare_period_fit(self):
+        sine_period, sine_params, sine_uncertainties, sine_chisqu = self.finder.fit_sinusoid()
 
     def run_period_analysis(self):
         best_period, best_params, best_uncertainties, best_chisqu = self.finder.fit_sinusoid()

@@ -3,8 +3,6 @@ Sawtooth period fitting Cepheids TGP 25/26
 @author: jp
 """
 
-# under construction !
-
 import numpy as np
 import scipy
 import emcee as mc
@@ -17,19 +15,18 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
     def __init__(self, name, time, magnitude, magnitude_error):
         super().__init__(name, time, magnitude, magnitude_error)
 
-    def sawtooth_model(self, t, amplitude, phase, offset, width, frequency):
+    def sawtooth_model(self, t, amplitude, phase, midline, width, period):
         """
         Sawtooth fitting function.
         """
-        return amplitude * scipy.signal.sawtooth(2 * np.pi * frequency * (t - phase), width) + offset
+        return amplitude * scipy.signal.sawtooth(((2 * np.pi * t)/period) + phase, width) + midline
     
     def saw_chi_sq(self, theta, period):
         """
         Chi-square function taking period as an argument so period may be iterated over.
         """
-        a, p, o, w = theta
-        f = 1 / period
-        M_model = self.sawtooth_model(self.time, a, p, o, w, f)
+        a, p, m, w = theta
+        M_model = self.sawtooth_model(self.time, a, p, m, w, period)
 
         chisq = np.sum(((self.magnitude - M_model) / self.magnitude_error)**2)
 
@@ -42,106 +39,110 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         p_min = 1.49107 # days, Breger (1980)
         p_max = 78.14 # days, Soszyński et al. (2024)
-        period_range = np.linspace(p_min, p_max, 100)
+        self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
-        chisqu_vals = []
+        self.chisqu_vals = []
         param_vals = []
         param_uncertainties = []
 
-        for period in period_range:
-            # define a rough initial guess
+        # hold period fixed and fit other parameters
+        for period in self.period_range:
+            # define a very rough initial guess
             a0 = (np.max(self.magnitude) - np.min(self.magnitude)) / 2 
             p0 = 0.0
-            o0 = np.median(self.magnitude)
-            theta = [a0, p0, o0]
-            frequency = 1 / period
-                
-            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, o: self.sinusoid_model(t, a, p, o, frequency), 
-                                                   self.time, self.magnitude, theta, 
+            m0 = np.median(self.magnitude)
+            w0 = 0.5
+            theta = [a0, p0, m0, w0]
+            # lambda function allows period to be held fixed
+            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, m, w: self.sawtooth_model(t, a, p, m, w, 
+                                                                                              period), 
+                                                   self.time, self.magnitude, p0=theta, 
                                                    sigma=self.magnitude_error, absolute_sigma=True)
-            
+
             param_vals.append(parameters)
-            uncertainties = np.sqrt(np.diag(cov))
+            uncertainties = np.sqrt(np.diag(cov)) # uncertainties are square root of covariance matrix diagonals
             param_uncertainties.append(uncertainties)
 
-            chisqu = self.chi_sq(parameters, period)
-            chisqu_vals.append(chisqu)
+            chisqu = self.saw_chi_sq(parameters, period)
+            self.chisqu_vals.append(chisqu)
 
-        fig, ax = plt.subplots()
-        ax.plot(period_range, chisqu_vals)
-        ax.set_xlabel('Period [days]')
-        ax.set_ylabel(f"$\chi^2$")
-        ax.set_title(f"$\chi^2$ value for period range")
-        plt.show()
-
-        best_period_index = np.argmin(chisqu_vals)
-        best_chisqu_period = period_range[best_period_index]
+        # extract best fit parameters and uncertainties
+        best_period_index = np.argmin(self.chisqu_vals)
+        best_chisqu_period = self.period_range[best_period_index]
         best_chisqu_params = param_vals[best_period_index]
         best_chisqu_uncertainties = param_uncertainties[best_period_index]
-        best_chisqu = chisqu_vals[best_period_index]
+        best_chisqu = self.chisqu_vals[best_period_index]
 
-        print(f"Best period: {best_chisqu_period} \n with $\chi^2$ value of {best_chisqu}")
+        self.a0, self.p0, self.m0, self.w0 = best_chisqu_params
+        self.period0 = best_chisqu_period
 
-        print(f"Best-fit parameters:")
-        for i in range(len(best_chisqu_params)):
-            print(f"{best_chisqu_params[i]} \u00B1 {best_chisqu_uncertainties[i]}")
-
-        self.a0, self.p0, self.o0 = best_chisqu_params
-        self.f0 = 1 / best_chisqu_period
-
-        return best_chisqu_period, best_chisqu_params
+        return best_chisqu_period, best_chisqu_params, best_chisqu_uncertainties, best_chisqu
     
     def plot_sawtooth_fit(self):
         """
         Overplot the modelled data from curve_fit onto the data.
         """
+        # diagnostic plot to analyse curve fitting quality
         fig, ax = plt.subplots()
-        y = self.sinusoid_model(self.time, self.a0, self.p0, self.o0, self.f0)
-        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
+        ax.plot(self.period_range, self.chisqu_vals, label=f"$\chi^2$", color='r')
+        ax.legend()
+        ax.set_xlabel('Period [days]')
+        ax.set_ylabel(f"$\chi^2$ Value")
+        ax.set_title(f"$\chi^2$ value for period range")
+        plt.show()
+        
+        # overplot model onto original light curve
+        fig, ax = plt.subplots()
+
+        # generate data to visualise the fit
+        x = np.linspace(self.time.min(), self.time.max(), 100)
+        y = self.sawtooth_model(x, self.a0, self.p0, self.m0, self.w0, self.period0)
+
+        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
+                    label='Original Data', color='black', capsize=5)
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.set_title(self.name)
-        ax.plot(self.time, y, label='Modelled Data')
+        ax.plot(x, y, label='Least-Squares Model', color='r')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
-        ax.set_title(f"Sinusoidal $\chi^2$ Fit for Cepheid {self.name}")
+        ax.set_title(f"Least-Squares Sawtooth Fit for Cepheid {self.name}")
 
         plt.show()
 
-    
     def saw_ln_likelihood(self, theta):
         """
         Log-likelihood function that takes a parameter vector as its input and returns the log-likelihood.
         The likelihood function is the probability of the dataset given the parameters.
         """
-        a, f, p, o, w = theta
-        modelled_magnitude = self.sawtooth_model(self.time, a, f, p, o, w)
+        a, p, m, w, period = theta
+        modelled_magnitude = self.sawtooth_model(self.time, a, p, m, w, period)
         residuals = self.magnitude - modelled_magnitude
-        constant = np.log(2 * np.pi * self.magnitude_error**2)
+        constant = np.log(2 * np.pi * self.magnitude_error**2) # constant term added for completeness
 
         return -0.5 * np.sum((residuals / self.magnitude_error)**2 + constant)
 
     def saw_ln_prior(self, theta):
+
         """
         Generate priors for the posterior distribution that will be sampled from.
         """
-        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0)
-        f_min, f_max = 0.5 * self.f0, 2 * self.f0 # frequency can't be negative
-        p_min, p_max = self.p0 - 2*abs(self.p0), self.p0 + 2*abs(self.p0)
-        o_min, o_max = self.o0 - 2*abs(self.o0), self.o0 + 2*abs(self.o0)
-        w_min, w_max = 0.0, 1.0  # width must be in range 0-1
+        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0) # range is currently quite large
+        p_min, p_max = -1 * np.pi, np.pi # explores all of phase space
+        m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0) # also quite large
+        w_min, w_max = 0, 1
+        period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative
 
-        a, f, p, o, w = theta
-        
+        a, p, m, w, period = theta
+
         if (a_min < a < a_max and
-            f_min < f < f_max and
-            p_min < p < p_max and
-            o_min < o < o_max and
-            w_min <= w <= w_max):
-            return 0.0
+        p_min < p < p_max and
+        m_min < m < m_max and
+        w_min < w < w_max and
+        period_min < period < period_max):
+            return 0.0 # ln(1) = 0: flat prior, all values are equally likely
         else:
-            return -np.inf
-        
+            return -np.inf # prior is also bounded to physical region of parameter space
+
     def saw_ln_prob(self, theta):
         """
         Full log-probability function combining the priors and the likelihood.
@@ -155,11 +156,23 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         Uses chi-squared result to determine best initial position for walkers.
         """
-        w0 = 0.5
-        pos = np.array([self.a0, self.f0, self.p0, self.o0, w0]) # stitch into parameter vector
+        pos = np.array([self.a0, self.p0, self.m0, self.w0, self.period0]) # stitch into parameter vector
+
+        # recreate boundaries from saw_ln_prior
+        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0)
+        p_min, p_max = -np.pi, np.pi
+        m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0)
+        w_min, w_max = 0, 1
+        period_min, period_max = 0.9 * self.period0, 1.1 * self.period0  
         
-        starting_position = pos + 1e-2 * np.random.randn(nwalkers, ndim) # add gaussian noise
+        starting_position = pos + 1e-1 * np.random.randn(nwalkers, ndim)
         
+        # Clip to ensure all walkers are within bounds
+        starting_position[:, 0] = np.clip(starting_position[:, 0], a_min, a_max)
+        starting_position[:, 1] = np.clip(starting_position[:, 1], p_min, p_max)
+        starting_position[:, 2] = np.clip(starting_position[:, 2], m_min, m_max)
+        starting_position[:, 3] = np.clip(starting_position[:, 3], w_min, w_max)
+        starting_position[:, 4] = np.clip(starting_position[:, 4], period_min, period_max)
         return starting_position
     
     def saw_run_mcmc(self):
@@ -173,17 +186,47 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
 
         sampler = mc.EnsembleSampler(nwalkers, ndim, self.saw_ln_prob) # sample the distribution
 
-        print(f"Running burn-in for cepheid...")
-        pos = sampler.run_mcmc(pos, 100) # let walkers explore parameter space
+        # first allow walkers to explore parameter space
+        print(f"Running burn-in for {self.name}...")
+        pos = sampler.run_mcmc(pos, 100) # small burn-in of 100 steps
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
-
+        # with walkers settled in, run the main chain
         print(f"Running production...")
-        sampler.run_mcmc(pos, 5000, progress=True) # run main chain
+        sampler.run_mcmc(pos, 10000, progress=True) # progress=True generates a progress bar
 
         self.sampler = sampler # keep sampler for analysis of quality of chain
-        return sampler
+
+        try:
+            tau = self.sampler.get_autocorr_time()
+            thin = int(np.mean(tau) / 2) # thinning helps speed up computing
+        except mc.autocorr.AutocorrError:
+            print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
+            thin = 10 
+        self.thin = thin
+        self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
+        
+        quantiles = [2.5, 50, 97.5]  # 0.025-0.975 is ~ 2σ gaussian error
+        lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
+
+        # the median (0.5) summarises the central tendency of the posterior distribution
+        self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0 = median
+
+        # compute errors from quartiles
+        self.mc_a0_err = (upper[0] - median[0], median[0] - lower[0])
+        self.mc_p0_err = (upper[1] - median[1], median[1] - lower[1])
+        self.mc_m0_err = (upper[2] - median[2], median[2] - lower[2])
+        self.mc_w0_err = (upper[3] - median[3], median[3] - lower[3])
+        self.mc_period0_err = (upper[4] - median[4], median[4] - lower[4])
+        
+        errors = (upper - median, median - lower)
+        
+        log_prob = self.sampler.get_log_prob(thin=self.thin, flat=True)
+        best_index = np.argmax(log_prob)
+        a0, p0, o0, w0, period0 = self.flat_samples[best_index]
+        
+        return median, errors, tau, period0
 
     def saw_parameter_time_series(self):
         """
@@ -193,7 +236,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         ndim = 5
         fig, axes = plt.subplots(5, figsize=(10, 7), sharex=True)
         samples = self.sampler.get_chain()
-        labels = ["Amplitude", "Frequency", "Phase", "Offset", "Width"]
+        labels = ["Amplitude","Phase", "Midline", "Width", "Period"]
         for i in range(ndim):
             ax = axes[i]
             ax.plot(samples[:, :, i], "k", alpha=0.3)
@@ -206,25 +249,20 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         First diagnostic plot: corner plot to analyse quality of fit.
         """
-        tau = self.sampler.get_autocorr_time()
-        print(f"Autocorrelation times: {tau}")
-        thin  = int(np.mean(tau) / 2)
-        self.flat_samples = self.sampler.get_chain(thin=thin, flat=True)
-        
-        labels = ["Amplitude", "Frequency", "Phase", "Offset", "Width"]
+        labels = ["Amplitude", "Phase", "Midline", "Width", "Period"]
         fig = corner.corner(
-            self.flat_samples, labels=labels, truths=truths
-            )
+            self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
+            quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
+            title_fmt=".3f"
+            ) 
         plt.show()
-    
+
     def plot_sawtooth_emcee_fit(self):
         """
         Plot the model returned by emcee.
         """
-        a0, f0, p0, o0, w0 = np.mean(self.flat_samples)
-
         fig, ax = plt.subplots()
-        y = self.sawtooth_model(self.time, a0, f0, p0, o0, w0)
+        y = self.sawtooth_model(self.time, self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0)
         ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')

@@ -297,7 +297,7 @@ class Sinusoid_Period_Finder:
             thin = 10 
         self.thin = thin
         self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
-        
+
         quantiles = [2.5, 50, 97.5]  # 0.025-0.975 is ~ 2σ gaussian error
         lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
 
@@ -314,7 +314,7 @@ class Sinusoid_Period_Finder:
         
         log_prob = self.sampler.get_log_prob(thin=self.thin, flat=True)
         best_index = np.argmax(log_prob)
-        a0, p0, o0, period0 = self.flat_samples[best_index]
+        _, _, _, period0 = self.flat_samples[best_index]
         
         return median, errors, tau, period0
 
