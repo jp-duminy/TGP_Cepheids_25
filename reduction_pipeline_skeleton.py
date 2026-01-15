@@ -18,18 +18,6 @@ class CalibrationSet:
         
         self._master_bias = None
         self._master_flat = None
-
-    def describe_array(name, arr, cutout=5):
-        """Print diagnostic information for an image array."""
-        print(f"\n{name}:")
-        print(f"  shape = {arr.shape}")
-        print(f"  dtype = {arr.dtype}")
-        print(f"  min / max = {arr.min():.3f} / {arr.max():.3f}")
-        print(f"  mean ± std = {arr.mean():.3f} ± {arr.std():.3f}")
-
-        cy, cx = arr.shape[0] // 2, arr.shape[1] // 2
-        snippet = arr[cy-cutout:cy+cutout, cx-cutout:cx+cutout]
-        print(f"  central {2*cutout}×{2*cutout} cutout:\n{snippet}")
             
     def _trim(self, data):
         """
