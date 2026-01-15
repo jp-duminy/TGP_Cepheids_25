@@ -18,7 +18,19 @@ class CalibrationSet:
         
         self._master_bias = None
         self._master_flat = None
-        
+
+    def describe_array(name, arr, cutout=5):
+        """Print diagnostic information for an image array."""
+        print(f"\n{name}:")
+        print(f"  shape = {arr.shape}")
+        print(f"  dtype = {arr.dtype}")
+        print(f"  min / max = {arr.min():.3f} / {arr.max():.3f}")
+        print(f"  mean ± std = {arr.mean():.3f} ± {arr.std():.3f}")
+
+        cy, cx = arr.shape[0] // 2, arr.shape[1] // 2
+        snippet = arr[cy-cutout:cy+cutout, cx-cutout:cx+cutout]
+        print(f"  central {2*cutout}×{2*cutout} cutout:\n{snippet}")
+            
     def _trim(self, data):
         """
         Trims desired number of pixels from image.
@@ -323,7 +335,93 @@ class CepheidStacker:
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
+def run_single_night_test(
+    base_dir,
+    night_name,
+    week_name,
+    cepheid_num,
+    binning="1x1",
+    filter_name="V",
+    min_sequence=5,
+    selection_method="last_n"
+):
+    base_path = Path(base_dir)
+    cepheids_path = base_path / "Cepheids"
+    calibrations_path = base_path / "Calibrations"
 
+    print("="*70)
+    print(f"TEST MODE — NIGHT {night_name}, CEPHEID {cepheid_num}")
+    print("="*70)
+
+    # ------------------------------------------------------------------
+    # Locate calibration directories
+    # ------------------------------------------------------------------
+    bias_dir = None
+    flat_dir = None
+
+    for d in calibrations_path.iterdir():
+        if d.is_dir():
+            name = d.name.lower()
+            if week_name.lower() in name and "bias" in name and binning in d.name:
+                bias_dir = d
+            if week_name.lower() in name and "flat" in name and filter_name in d.name and binning in d.name:
+                flat_dir = d
+
+    if bias_dir is None or flat_dir is None:
+        raise RuntimeError("Could not locate calibration directories")
+
+    print(f"Bias dir: {bias_dir.name}")
+    print(f"Flat dir: {flat_dir.name}")
+
+    calib = CalibrationSet(week_name, bias_dir, flat_dir)
+    calib.prepare()
+
+    # ------------------------------------------------------------------
+    # Inspect master calibration frames
+    # ------------------------------------------------------------------
+    describe_array("MASTER BIAS", calib._master_bias)
+    describe_array("MASTER FLAT", calib._master_flat)
+
+    # ------------------------------------------------------------------
+    # Locate Cepheid files
+    # ------------------------------------------------------------------
+    organizer = CepheidDataOrganizer(cepheids_path)
+    night_dir = cepheids_path / night_name
+    night_data = organizer.organize_night(night_dir)
+
+    if cepheid_num not in night_data:
+        raise RuntimeError(f"No files found for Cepheid {cepheid_num}")
+
+    files = organizer.filter_useful_images(
+        night_data[cepheid_num],
+        min_sequence=min_sequence,
+        method=selection_method
+    )
+
+    print(f"\nSelected {len(files)} images")
+
+    reducer = CepheidImageReducer(calib)
+
+    reduced_images = []
+    headers = []
+
+    for f in files:
+        reduced, header = reducer.reduce_image(f)
+        reduced_images.append(reduced)
+        headers.append(header)
+
+    # ------------------------------------------------------------------
+    # Inspect a single reduced image
+    # ------------------------------------------------------------------
+    describe_array("SINGLE REDUCED IMAGE", reduced_images[0])
+
+    # ------------------------------------------------------------------
+    # Stack and inspect
+    # ------------------------------------------------------------------
+    stacked, _ = CepheidStacker.stack_images(reduced_images, headers, method="mean")
+    describe_array("FINAL STACKED IMAGE", stacked)
+
+    print("\nTEST COMPLETE")
 def run_full_cepheid_pipeline(
     base_dir,
     night_to_week_mapping,
@@ -531,7 +629,7 @@ def run_full_cepheid_pipeline(
 # ============================================================================
 # EXAMPLE USAGE
 # ============================================================================
-
+"""
 if __name__ == "__main__":
     
     # Define which weeks' calibrations to use for each observation night
@@ -543,18 +641,21 @@ if __name__ == "__main__":
         '2025_09_30': 'Week2',
         # Add more nights as needed
     }
-    
-    # Run the pipeline
-    run_full_cepheid_pipeline(
+"""
+if __name__ == "__main__":
+
+    run_single_night_test(
         base_dir="/storage/teaching/TelescopeGroupProject/2025-26",
-        night_to_week_mapping=night_to_week_mapping,
+        night_name="2025_09_22",
+        week_name="Week1",
+        cepheid_num=1,
         binning="1x1",
         filter_name="V",
-        output_dir=None,  # Will default to base_dir/Reduced
-        cepheid_nums=[1, 2, 3, 4, 5, 7, 8, 9, 10, 11],  # Or None for all
         min_sequence=5,
-        selection_method='last_n'  # or 'exposure_time'
+        selection_method="last_n"
     )
+
+
 from pathlib import Path
    
    base = Path("/storage/teaching/TelescopeGroupProject/2025-26")
