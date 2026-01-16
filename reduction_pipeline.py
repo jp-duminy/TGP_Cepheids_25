@@ -178,11 +178,7 @@ class Calibration_Manager:
         for name, calib_set in self.calibration_sets.items():
             print(f"\n{name}:")
             calib_set.prepare()
-
-
-    
-
-    
+ 
 class CepheidDataOrganiser:
 
     """Organises Cepheid files by number and night."""
