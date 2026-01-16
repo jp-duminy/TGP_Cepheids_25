@@ -83,3 +83,52 @@ class Calibration_Set:
         self.create_master_flat()
         return self
     
+class CepheidDataOrganiser:
+
+    """Organises Cepheid files by number and night."""
+
+    def __init__(self, cepheids_directory):
+        """Create path to Cepheid directory and find patterns in files of "Cepheid_(#)"."""
+        self.cepheids_directory = Path(cepheids_directory)
+        self.cepheid_pattern = re.compile(r'Cepheids?_(\d+)', re.IGNORECASE) 
+    
+    def list_observation_nights(self):
+        """Sort all directories for nights in the Cepheids directory
+        in alphabetical order"""
+        nights = sorted([night for night in self.cepheids_directory.iterdir() if night.is_dir()])
+        return nights
+
+    def organise_night(self, night_directory):
+        """Organise each night's files based on Cepheid number"""
+        cepheid_files = defaultdict(list)
+        
+        for file in sorted(Path(night_directory).glob("*.fits")):
+            pattern_presence = self.cepheid_pattern.search(file.name)
+            if pattern_presence:
+                ceph_num = int(pattern_presence.group(1))
+                cepheid_files[ceph_num].append(file)
+        
+        return dict(cepheid_files)
+    
+    def organise_all_nights(self):
+        """Organise all Cepheid files firstly by night, and then by Cepheid number. Returns
+        a list of files that correspond to each night+Cepheid."""
+        all_data = {}
+        nights = self.list_observation_nights()
+        
+        for night in nights:
+            night_name = night.name
+            cepheid_files = self.organise_night(night)
+            if cepheid_files:
+                all_data[night_name] = cepheid_files
+        
+        return all_data
+    
+    def filter_useful_images(file_list, min_sequence=5, method='last_n'):
+        """Static method""" 
+    
+    
+
+
+
+
