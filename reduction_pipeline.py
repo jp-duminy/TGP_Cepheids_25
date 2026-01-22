@@ -561,7 +561,7 @@ if __name__ == "__main__":
     }
 
     cepheid_nums= [
-    1, 2, 3, 4, 5
+    2, 3, 9
     ]
 
     summary, images = run_pipeline(
