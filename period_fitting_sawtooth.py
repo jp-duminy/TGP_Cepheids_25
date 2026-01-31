@@ -245,7 +245,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
             ax.yaxis.set_label_coords(-0.1, 0.5)
             axes[-1].set_xlabel("Step Number")
 
-    def saw_plot_corner(self, truths):
+    def saw_plot_corner(self):
         """
         First diagnostic plot: corner plot to analyse quality of fit.
         """
@@ -262,16 +262,19 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Plot the model returned by emcee.
         """
         fig, ax = plt.subplots()
-        y = self.sawtooth_model(self.time, self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0)
-        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', label='Data')
+
+        # generate some plotting data
+        x = np.linspace(self.time.min(), self.time.max(), 100)
+        y = self.sawtooth_model(x, self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0)
+
+        ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
+                    label='Original Data', color='black', capsize=5)
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.set_title(self.name)
-        ax.plot(self.time, y, label='Modelled Data')
+        ax.plot(x, y, label='Modelled Data', color='r')
         ax.legend()
         ax.invert_yaxis() # brighter -> lower magnitude
-        ax.set_title(f"Emcee Fit for Cepheid {self.name}")
+        ax.set_title(f"Emcee Sawtooth Fit for Cepheid {self.name}")
 
         plt.show()
-
 
