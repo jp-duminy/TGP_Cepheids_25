@@ -21,55 +21,10 @@ import Cepheid_apertures as cap
 
 
 # ------------------------------------------------------------
-# Instrumental magnitude
-# ------------------------------------------------------------
-
-def instrumental_magnitude(counts):
-    """
-    Compute instrumental magnitude from sky-subtracted counts.
-
-    This matches the definition used in Aperture_Photometry:
-    m_inst = -2.5 log10(counts)
-
-    Counts must NOT be exposure-time normalised.
-    """
-    if counts <= 0:
-        return np.nan
-    return -2.5 * np.log10(counts)
-
-
-
-# ------------------------------------------------------------
-# Atmospheric extinction correction
-# ------------------------------------------------------------
-
-def atmospheric_extinction(m_inst, airmass, k_v=0.20):
-    """
-    Correct instrumental magnitude for atmospheric extinction.
-
-    m_corr = m_inst - k * X
-
-    Parameters
-    ----------
-    m_inst : float
-        Instrumental magnitude
-    airmass : float
-        Airmass
-    k_v : float
-        V-band extinction coefficient (mag/airmass)
-
-    Returns
-    -------
-    float
-        Atmosphere-corrected magnitude
-    """
-    return m_inst - k_v * airmass
-
-# ------------------------------------------------------------
 # Extinction coefficient fitting
 # ------------------------------------------------------------
 
-def fit_extinction_weighted(airmass, Vmag, counts, count_err, exptime):
+def fit_extinction_weighted(airmass, Vmag, m_inst, m_err):
     """
     Weighted fit to determine atmospheric extinction coefficient (k)
     and photometric zero-point (Z).
@@ -109,17 +64,7 @@ def fit_extinction_weighted(airmass, Vmag, counts, count_err, exptime):
 
     # Convert to numpy arrays
     airmass = np.asarray(airmass)
-    Vmag = np.asarray(Vmag)
-    counts = np.asarray(counts)
-    count_err = np.asarray(count_err)
-    exptime = np.asarray(exptime)
-
-    # Instrumental magnitudes (counts per second)
-    flux = counts / exptime
-    m_inst = -2.5 * np.log10(flux)
-
-    # Uncertainty in instrumental magnitude
-    m_err = 1.086 * (count_err / counts)
+    Vmag = np.asarray(Vmag) #Magnitudes for standard stars
 
     # Dependent variable
     y = Vmag - m_inst
@@ -136,59 +81,8 @@ def fit_extinction_weighted(airmass, Vmag, counts, count_err, exptime):
     Z_err, k_err = results.bse
 
     Z_airmass1 = Z + k * 1.0
-    return k, Z, Z_airmass1, k_err, Z_err
-
-
-
-# ------------------------------------------------------------
-# Zero-point calibration
-# ------------------------------------------------------------
-
-def apply_zero_point(m_atm, zero_point):
-    """
-    Apply photometric zero point.
-
-    Parameters
-    ----------
-    m_atm : float
-        Atmosphere-corrected instrumental magnitude
-    zero_point : float
-        Photometric zero point
-
-    Returns
-    -------
-    float
-        Standard magnitude
-    """
-    return m_atm + zero_point
-
-
-# ------------------------------------------------------------
-# Interstellar dust extinction
-# ------------------------------------------------------------
-
-def dust_extinction(mag, ebv, Rv=3.1):
-    """
-    Correct magnitude for interstellar dust extinction.
-
-    A_V = Rv * E(B-V)
-
-    Parameters
-    ----------
-    mag : float
-        Calibrated magnitude (after atmospheric correction and zero-point)
-    ebv : float
-        Colour excess E(B-V) (from values given in Learn)
-    Rv : float
-        Total-to-selective extinction ratio
-
-    Returns
-    -------
-    float
-        Extinction-corrected magnitude
-    """
-    A_v = Rv * ebv
-    return mag - A_v
+    Z_airmass1_err = np.sqrt(Z_err ** 2 + k_err ** 2)
+    return k, Z_airmass1, k_err, Z_airmass1_err
 
 # ------------------------------------------------------------
 # Plotting atmospheric extinction fit

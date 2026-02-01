@@ -14,7 +14,17 @@ class AndromedaFilterCorrection:
         self.u = u
         self.g = g
 
-    def __call__(self): 
+    def mags(self, filter):
+        """Convert u and g photometric data to B and V data"""
+        B = self.u - 0.8116*(self.u - self.g) + 0.1313
+        B_uncertainty = 0.0095
+        V = self.g - 0.2906*(self.u - self.g) + 0.0885
+        V_uncertainty = 0.0129
+        if filter == "B":
+            return B, B_uncertainty
+        return V, V_uncertainty
+
+    def colours(self): 
         """To convert the u and g photometric data to its B-V colour
         using Lupton (2005) calculations."""
         B = self.u - 0.8116*(self.u - self.g) + 0.1313
