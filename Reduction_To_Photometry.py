@@ -5,6 +5,8 @@ from collections import defaultdict
 import re
 from datetime import datetime
 import pandas as pd
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 
 from Cepheid_apertures import AperturePhotometry
 
@@ -77,7 +79,6 @@ class Reduction_To_Photometry:
         Run aperture photometry and return results as a dict
         suitable for a pandas DataFrame row.
         """
-
         # identify cepheid
         ceph_name = source_file.stem
 
@@ -125,27 +126,35 @@ if __name__ == "__main__":
     ceph_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_test"
     output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_Photometry"
 
-    """
-    #data_output = output_dir / 
-    reducer = Reduction_To_Photometry(ceph_dir)
+    ceph_coords = {"Ceph_num": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"],
+                   "RA": ["20 12 22.83", "20 54 57.53", "20 57 20.83", "21 04 16.63", "21 57 52.69", "22 40 52.15", "22 48 38.00", "23 07 10.08", "00 26 19.45", "00 29 58.59", "01 32 43.22"],
+                   "Dec": ["+32 52 17.8", "+47 32 01.7", "+40 10 39.1", "+39 58 20.1", "+56 09 50.0", "+56 49 46.1", "+56 19 17.5", "+58 33 15.1", "+51 16 49.3", "+60 12 43.1", "+63 35 37.7"]}
     
-    for date_dir in reducer.date_dirs():
-        for file in date_dir.glob("*.fits"):
-            photo = reducer.do_photometry(file)
-            reducer.save_photometry(photometry=photo, source_file=file, date=date_dir.name, output_base=output_dir)
-    """
+    ceph_skycoords = {}
+
+    for num, ra_str, dec_str in zip(
+        ceph_coords["Ceph_num"],
+        ceph_coords["RA"],
+        ceph_coords["Dec"]
+    ):
+        coord = SkyCoord(
+            ra_str,
+            dec_str,
+            unit=(u.hourangle, u.deg),
+            frame="icrs"
+        )
+        ceph_skycoords[num] = coord
+
+    for num, coord in ceph_skycoords.items():
+        print(num, coord.ra.deg, coord.dec.deg)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # --------------------------------------------------
     # Initialise reducer
-    # --------------------------------------------------
     reducer = Reduction_To_Photometry(ceph_dir)
 
     all_rows = []
 
-    # --------------------------------------------------
-    # Main loop: dates → files → photometry
-    # --------------------------------------------------
+    # Main loop: dates to files to photometry
     for date_dir in reducer.date_dirs():
 
         date = date_dir.name
@@ -159,12 +168,13 @@ if __name__ == "__main__":
             try:
                 # Run aperture photometry object
                 ap_obj = reducer.do_photometry(file)
-
                 header = ap_obj.header
+                data = ap_obj.data
+                wcs = ap_obj.wcs
 
-                # --------------------------------------------------
-                # Get metadata from stacked FITS header
-                # --------------------------------------------------
+                ny, nx = data.shape
+
+                # Get metadata from stacked FITS headers
                 exptime = header.get("EXPTIME", header.get("MEANEXP", 1.0))
                 gain = header.get("GAIN", header.get("MEANGAIN", 1.0))
                 read_noise = header.get("RDNOISE", header.get("TOTRN", 5.0))
@@ -172,22 +182,115 @@ if __name__ == "__main__":
                 time_isot = header.get("DATE-OBS")
                 if time_isot is None:
                     raise KeyError("DATE-OBS not found in FITS header")
-
-                # --------------------------------------------------
+                """
                 # Photometry
-                # --------------------------------------------------
                 # Before calling get_centroid_and_fwhm()
                 """
                 # not sure about this?
                 data = ap_obj.data
                 ny, nx = data.shape
-                # Crop one row/column if even
-                if ny % 2 == 0:
-                    data = data[:ny-1, :]
-                if nx % 2 == 0:
-                    data = data[:, :nx-1]
-                ap_obj.data = data  # replace the data in the object
-                """
+                # Find which Cepheids are on this image (WCS)
+                for ceph_num, coord in ceph_skycoords.items():
+
+                    #x_guess, y_guess = wcs.world_to_pixel_values(coord.ra.deg, coord.dec.deg)
+                    x_guess, y_guess = wcs.world_to_pixel_values(coord)
+                    print(f"Checking Cepheid {ceph_num} at pixel ({x_guess:.1f}, {y_guess:.1f})")
+
+                    if not (0 <= x_guess < nx and 0 <= y_guess < ny):
+                        continue  # Cepheid not on this CCD
+
+                    # Cutout around expected position
+                    x_guess = float(x_guess)
+                    y_guess = float(y_guess)
+                    
+                    x0 = int(round(x_guess))
+                    y0 = int(round(y_guess))
+
+                    half_size = 25  # pixels
+                    x1 = max(0, x0 - half_size)
+                    x2 = min(nx, x0 + half_size)
+                    y1 = max(0, y0 - half_size)
+                    y2 = min(ny, y0 + half_size)
+
+                    cutout = data[y1:y2, x1:x2]
+
+                    ny_c, nx_c = cutout.shape
+                    if ny_c < 7 or nx_c < 7:
+                        continue
+
+                    # Force odd dimensions
+                    if ny_c % 2 == 0:
+                        cutout = cutout[:-1, :]
+                        y2 -= 1
+
+                    if nx_c % 2 == 0:
+                        cutout = cutout[:, :-1]
+                        x2 -= 1
+
+                    if cutout.size == 0:
+                        continue
+
+                    # Centroid + FWHM
+                    centroid_local, fwhm = ap_obj.get_centroid_and_fwhm(cutout)
+
+                    centroid = (
+                        centroid_local[0] + x1,
+                        centroid_local[1] + y1,
+                    )
+
+                    ap_rad = 2.0 * fwhm
+
+                    # Aperture photometry
+                    target_flux, sky_per_pix, ap_area, ann_area = ap_obj.aperture_photometry(
+                        centroid=centroid,
+                        ap_rad=ap_rad,
+                        ceph_name=f"cepheid_{ceph_num}",
+                        date=date,
+                        plot=False,
+                    )
+
+                    magnitude = ap_obj.instrumental_magnitude(target_flux)
+
+                    magnitude_error = ap_obj.get_inst_mag_error(
+                        target_counts=target_flux,
+                        aperture_area=ap_area,
+                        sky_counts=sky_per_pix,
+                        sky_ann_area=ann_area,
+                        gain=gain,
+                        exp_time=exptime,
+                        read_noise=read_noise,
+                        stack_size=stack_size,
+                    )
+
+                    row = {
+                        "name": f"cepheid_{ceph_num}",
+                        "time": time_isot,
+                        "magnitude": magnitude,
+                        "magnitude_error": magnitude_error,
+                    }
+
+                    night_rows.append(row)
+                    all_rows.append(row)
+
+            except Exception as e:
+                print(f"Skipping {file.name}: {e}")
+
+        # Save per-night CSV
+        if night_rows:
+            df_night = pd.DataFrame(night_rows)
+            df_night = df_night.sort_values(by=["name", "time"]).reset_index(drop=True)
+            night_csv = date_output_dir / f"{date}_photometry.csv"
+            df_night.to_csv(night_csv, index=False)
+            print(f"Saved per-night CSV: {night_csv}")
+
+    # Save combined CSV
+    if all_rows:
+        df_all = pd.DataFrame(all_rows)
+        df_all = df_all.sort_values(by=["name", "time"]).reset_index(drop=True)
+        combined_csv = Path(output_dir) / "all_nights_photometry.csv"
+        df_all.to_csv(combined_csv, index=False)
+        print(f"Saved combined CSV: {combined_csv}")
+        """
 
                 centroid, fwhm = ap_obj.get_centroid_and_fwhm(ap_obj.data, plot=True)
                 ap_rad = 2.0 * fwhm
@@ -214,9 +317,7 @@ if __name__ == "__main__":
                     stack_size=stack_size,
                 )
 
-                # --------------------------------------------------
                 # Store row
-                # --------------------------------------------------
                 row = {
                     "name": file.stem,
                     "time": time_isot,
@@ -230,9 +331,7 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"Skipping {file.name}: {e}")
 
-        # --------------------------------------------------
         # Save per-night CSV
-        # --------------------------------------------------
         if night_rows:
             df_night = pd.DataFrame(night_rows)
             df_night = df_night.sort_values(by=["name", "time"]).reset_index(drop=True)
@@ -240,12 +339,11 @@ if __name__ == "__main__":
             df_night.to_csv(night_csv_path, index=False)
             print(f"Saved per-night CSV: {night_csv_path}")       
 
-    # --------------------------------------------------
     # Save combined CSV for all nights
-    # --------------------------------------------------
     if all_rows:
         df_all = pd.DataFrame(all_rows)
         df_all = df_all.sort_values(by=["name", "time"]).reset_index(drop=True)
         combined_csv_path = Path(output_dir) / "all_nights_photometry.csv"
         df_all.to_csv(combined_csv_path, index=False)
         print(f"Saved combined CSV: {combined_csv_path}")
+        """
