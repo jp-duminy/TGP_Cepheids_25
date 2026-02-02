@@ -6,7 +6,8 @@ import photutils.psf as psf
 import astropy.io.fits as fits
 from astropy.wcs import WCS
 import matplotlib.pyplot as plt
-
+import csv
+import statsmodels.api as sm
 class AperturePhotometry: 
 
     """A class to perform basic aperture photometry on a dataset, up to and
@@ -27,7 +28,8 @@ class AperturePhotometry:
         if data.ndim != 2:
             raise ValueError(f"The image is {data.ndim}D, not 2D")
         
-        data = data.astype(float)
+        # Ensure data is float type before any operations
+        data = np.asarray(data, dtype=np.float64)
         data = np.nan_to_num(data)
 
         self.header = header
@@ -50,7 +52,14 @@ class AperturePhotometry:
         other sources. Plot masked data as heatmap if plot == True, don't otherwise"""
         aperture = rect_ap((x,y), width, width)
         mask = aperture.to_mask(method = "center")
-        masked_data = mask.cutout(self.data)
+        
+        # Use cutout to extract the region
+        masked_data = mask.multiply(self.data)
+        
+        if masked_data is None or masked_data.size == 0:
+            raise ValueError(f"Mask region is outside image bounds. Coordinates: ({x}, {y}), Image shape: {self.data.shape}")
+        
+        masked_data = np.asarray(masked_data, dtype=np.float64)
     
         if plot == True:
             plt.imshow(masked_data)
@@ -58,25 +67,21 @@ class AperturePhotometry:
         
         return masked_data
 
-    def get_centroid_and_fwhm(self, data, plot = False):
+    def get_centroid_and_fwhm(self, x, y, width):
         """Get Gaussian centroid of target source around which to
         centre the aperture, and the FWHM of the target source centred around
         the centroid."""
-        #Crude bkgd subtraction
-        crude_sub_data = data - np.mean(data)
-        centroid = centroid_2dg(crude_sub_data) #Should be masked
-        fwhm = psf.fit_fwhm(data = crude_sub_data, xypos = centroid).item()
+        data = self.mask_data_and_plot(x, y, width, plot = False )
+        zero_mask = data > 0
+        centroid = centroid_2dg(data,mask=~zero_mask) #Should be masked
+        fwhm = psf.fit_fwhm(data = data, xypos = centroid, mask=~zero_mask).item()
         #Function expects data to be bkgd subtracted
         #Nan/inf values automatically masked
-        if plot == True:
-            plt.imshow(data)
-            plt.plot(centroid[0], centroid[1], marker = "+", color = "r")
-            plt.show()
 
         return centroid, fwhm
     
-    def aperture__photometry(self, data, centroid, ap_rad, ceph_name = None,
-                            date = None, inner=1.5, outer=2, plot = True, savefig = False):
+    def aperture_photometry(self, centroid, ap_rad, ceph_name,
+                            date, inner=1.5, outer=2, plot = True, savefig = False):
         """Main method: Using the determined centroids and FWHM of the source, Sum the fluxes
         through the circular apertures and annuli."""
 
@@ -91,7 +96,7 @@ class AperturePhotometry:
         #Plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis') # Display the image
+            ax.imshow(self.data, origin='lower', interpolation='nearest', cmap='viridis') # Display the image
             target_aperture.plot(ax=ax, color='red')
             sky_annulus.plot(ax=ax, color = "white")
             plt.title(f"{ceph_name} taken on {date}")
@@ -100,17 +105,17 @@ class AperturePhotometry:
             plt.show()
 
         #Sum flux through apertures
-        total_flux = ap(data, target_aperture)["aperture_sum"].value
-        annulus_flux = ap(data, sky_annulus)["aperture_sum"].value
+        total_flux = ap(self.data, target_aperture)["aperture_sum"].value
+        annulus_flux = ap(self.data, sky_annulus)["aperture_sum"].value
         #Get sky background
         mean_sky_bckgnd_per_pixel = annulus_flux / sky_annulus.area
         total_sky_bckgnd = mean_sky_bckgnd_per_pixel * target_aperture.area
 
         target_flux = total_flux - total_sky_bckgnd 
 
-        return target_flux, target_aperture.area, mean_sky_bckgnd_per_pixel, sky_annulus.area
+        return target_flux, mean_sky_bckgnd_per_pixel, target_aperture.area, sky_annulus.area
     
-    def curve_of_growth(self, data, ceph_name, date, savefig = False):
+    def curve_of_growth(self, ceph_name, date, savefig = False):
         """To calculate and plot the sky-subtracted flux obtained in a series
         of increasingly large apertures."""
 
@@ -118,11 +123,11 @@ class AperturePhotometry:
         sky_sub_ap_flux = np.zeros(16)
         inner = 1.4
         outer = 2.0
-        centroid, fwhm = self.get_centroid_and_fwhm(data)
+        centroid, fwhm = self.get_centroid_and_fwhm()
 
         for index, factor in enumerate(np.linspace(0.1, 4, 16)):
             aperture_radius[index] = factor*fwhm
-            flux = self.aperture__photometry(data, centroid, ap_rad = factor*fwhm, inner=inner, outer=outer, plot = False)[0]
+            flux = self.aperture_photometry(centroid, ap_rad = factor*fwhm, inner=inner, outer=outer, plot = False)[0]
             sky_sub_ap_flux[index] = flux
 
         normalised_ssaf = sky_sub_ap_flux / np.max(sky_sub_ap_flux)
@@ -165,8 +170,198 @@ class AperturePhotometry:
         error = 1.086 / snr
         return error
     
+class DustExtinction:
 
+    """This class calculates the dust extinction magnitude """
+
+    def __init__(self, filter, colour_excess):
+
+        """Initialise with R_V and colour_excess E(B-V), band
+        wavelengths, and filter of choice."""
+
+        self.R_V = 3.1
+        self.lambda_B = 0.43 #micrometres
+        self.lambda_V = 0.55 
+        self.colour_excess = colour_excess
+        self.filter = filter
+        if self.filter != "B" and self.filter != "V":
+            raise ValueError(f"The band filter must be either B or V")
+
+    def compute_extinction_mag(self):
+
+        """Compute dust extinction magnitude in B & V filters"""
+
+        #V-band extinction
+        A_V = self.R_V * self.colour_excess
+
+        if self.filter == "V":
+            return A_V
+        
+        #B-band extinction
+        x = 1 / self.lambda_B
+
+        y = x - 1.82
+  
+        a = 1 + 0.17699*y - 0.50447*(y**2) - 0.02427*(y**3) + \
+        0.72085*(y**4) +  0.01979*(y**5) - 0.77530*(y**6) + \
+        0.32999*(y**7)
+
+        b =  1.41338*y + 2.28305*(y**2) + 1.07233*(y**3) - \
+        5.38434*(y**4) - 0.62251*(y**5) + 5.30260*(y**6) - \
+        2.09002*(y**7)
+
+        A_B = A_V * (a + b / self.R_V)
+        
+        return A_B
+
+class AndromedaFilterCorrection:
+
+    """Photometric data from Liverpool comes in the ugriz filter
+    system. This method will convert data from the ugriz system to
+    the UBVRI system of PIRATE.
     
+    args: u, g
+    __call__: Returns B-V colour with uncertainty."""
+
+    def __init__(self, u = None, g = None):
+        """Initialise with magnitudes from ugriz filters"""
+        self.u = u
+        self.g = g
+
+    def mags(self, filter):
+        """Convert u and g photometric data to B and V data"""
+        B = self.u - 0.8116*(self.u - self.g) + 0.1313
+        B_uncertainty = 0.0095
+        V = self.g - 0.2906*(self.u - self.g) + 0.0885
+        V_uncertainty = 0.0129
+        if filter == "B":
+            return B, B_uncertainty
+        return V, V_uncertainty
+
+    def colours(self): 
+        """To convert the u and g photometric data to its B-V colour
+        using Lupton (2005) calculations."""
+        B = self.u - 0.8116*(self.u - self.g) + 0.1313
+        B_uncertainty = 0.0095
+        V = self.g - 0.2906*(self.u - self.g) + 0.0885
+        V_uncertainty = 0.0129
+        colour = B-V
+        colour_uncert = np.sqrt(B_uncertainty**2 + V_uncertainty**2)
+        return colour, colour_uncert
+
+class Airmass:
+    """Extract airmass data from fits header"""
+    def __init__(self, filename):
+        with fits.open(filename) as hdul:
+            header = hdul[0].header 
+        
+        if "AIRMASS" not in header:
+            raise AttributeError("AIRMASS doesn't exist in this header. Brill.")
+
+        self.airmass = header["AIRMASS"]
+
+ 
+def fit_extinction_weighted(airmass, Vmag, m_inst, m_err):
+    """
+    Weighted fit to determine atmospheric extinction coefficient (k)
+    and photometric zero-point (Z).
+
+    Fits:
+        V - m_inst = Z + kX
+
+    where:
+        m_inst = -2.5 log10(counts / exptime)
+
+    Parameters
+    ----------
+    airmass : array-like
+        Airmass values
+    Vmag : array-like
+        Catalog V magnitudes
+    counts : array-like
+        Measured counts
+    count_err : array-like
+        Uncertainty in counts
+    exptime : array-like
+        Exposure times (seconds)
+
+    Returns
+    -------
+    k : float
+        Extinction coefficient (mag/airmass)
+    Z : float
+        Zero-point at airmass = 0
+    Z_airmass1 : float
+        Zero-point at airmass = 1
+    k_err : float
+        Uncertainty in k
+    Z_err : float
+        Uncertainty in Z
+    """
+
+    # Convert to numpy arrays
+    airmass = np.asarray(airmass)
+    Vmag = np.asarray(Vmag) #Magnitudes for standard stars
+
+    # Dependent variable
+    y = Vmag - m_inst
+    X = airmass
+
+    # Weights
+    w = 1 / m_err**2
+
+    #use statsmodels for weighted least squares to get uncertainties (for more details see https://www.geeksforgeeks.org/machine-learning/weighted-least-squares-regression-in-python/)
+    X_sm = sm.add_constant(X)
+    wls_model = sm.WLS(y, X_sm, weights=w)
+    results = wls_model.fit()
+    Z, k = results.params
+    Z_err, k_err = results.bse
+    #Comment
+
+    Z_airmass1 = Z + k * 1.0
+    Z_airmass1_err = np.sqrt(Z_err ** 2 + k_err ** 2)
+    return k, Z_airmass1, k_err, Z_airmass1_err
+    
+def plot_atmospheric_extinction(airmass, Vmag, counts, count_err, exptime):
+    """
+    Plot atmospheric extinction fit.
+
+    Parameters
+    ----------
+    airmass : array-like
+        Airmass values
+    Vmag : array-like
+        Catalog V magnitudes
+    counts : array-like
+        Measured counts
+    count_err : array-like
+        Uncertainty in counts
+    exptime : array-like
+        Exposure times (seconds)
+    """
+    import matplotlib.pyplot as plt
+
+    k, Z, Z1, k_err, Z_err = fit_extinction_weighted(
+        airmass,
+        Vmag,
+        counts,
+        count_err,
+        exptime
+    )
+
+    m_inst = -2.5 * np.log10(counts / exptime)
+    y = Vmag - m_inst
+
+    plt.errorbar(airmass, y, yerr=1.086 * (count_err / counts), fmt='o', label='Data')
+    x_fit = np.linspace(min(airmass), max(airmass), 100)
+    y_fit = Z + k * x_fit
+    plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
+    plt.xlabel('Airmass')
+    plt.ylabel('V - m_inst')
+    plt.title('Atmospheric Extinction Fit')
+    plt.legend()
+    plt.grid()
+    plt.show()
 
     
 
