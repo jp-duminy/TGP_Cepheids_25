@@ -100,13 +100,13 @@ class CepheidPhotometryPipeline:
             
             # Aperture photometry
             ap_radius = 2.0 * fwhm
-            target_flux, sky_per_pix, ap_area, ann_area = ap.aperture_photometry(
+            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture__photometry(
+                data=ap.data,
                 centroid=centroid_global,
                 ap_rad=ap_radius,
                 ceph_name=f"cepheid_{cepheid_id}",
                 date=fits_path.parent.name,
-                plot=False,
-                subpixels=5
+                plot=False
             )
             
             # Calculate magnitude and error
@@ -145,8 +145,9 @@ class CepheidPhotometryPipeline:
         """
         ny, nx = data.shape
         
-        x0 = int(round(x_center))
-        y0 = int(round(y_center))
+        # Use numpy's round, then convert to int
+        x0 = int(np.round(x_center))
+        y0 = int(np.round(y_center))
         
         # Define cutout boundaries
         x1 = max(0, x0 - half_size)
