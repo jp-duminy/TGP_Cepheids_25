@@ -252,7 +252,7 @@ class Airmass:
 
     """Extract airmass data from fits header"""
 
-    def __init__(self, filename):
+    def __init__(self, filename, Vmag, m_inst, m_err):
         """Initialise filename, airmass, and other values"""
         self.filename = filename
         self.block = AirmassInfo().process_fits(filename)
@@ -265,8 +265,12 @@ class Airmass:
                 f"Airmass;       {airmass:.2f}\n"
             )'''
         self.airmass = float(self.block.split("Airmass;")[1].strip())
+        self.Vmag = Vmag
+        self.m_inst = m_inst
+        self.m_err = m_err
+
         
-    def fit_extinction_weighted(self, Vmag, m_inst, m_err):
+    def fit_extinction_weighted(self):
         """
         Weighted fit to determine atmospheric extinction coefficient (k)
         and photometric zero-point (Z).
@@ -309,12 +313,11 @@ class Airmass:
         Vmag = np.asarray(Vmag) #Magnitudes for standard stars
 
         # Dependent variable
-        y = Vmag - m_inst
+        y = self.Vmag - self.m_inst
         X = airmass
 
         # Weights
-        w = 1 / m_err**2
-
+        w = 1 / self.m_err**2
         #use statsmodels for weighted least squares to get uncertainties (for more details see https://www.geeksforgeeks.org/machine-learning/weighted-least-squares-regression-in-python/)
         X_sm = sm.add_constant(X)
         wls_model = sm.WLS(y, X_sm, weights=w)
@@ -327,7 +330,7 @@ class Airmass:
         Z_airmass1_err = np.sqrt(Z_err ** 2 + k_err ** 2)
         return k, Z_airmass1, k_err, Z_airmass1_err
         
-    def plot_atmospheric_extinction(self, Vmag, m_inst, m_err, exptime):
+    def plot_atmospheric_extinction(self):
         """
         Plot atmospheric extinction fit.
 
@@ -346,16 +349,11 @@ class Airmass:
         """
         import matplotlib.pyplot as plt
 
-        k, Z, Z1, k_err, Z_err = self.fit_extinction_weighted(
-            Vmag,
-            m_inst,
-            m_err,
-            exptime
-        )
+        k, Z, Z1, k_err, Z_err = self.fit_extinction_weighted()
 
-        y = Vmag - m_inst
+        y = self.Vmag - self.m_inst
 
-        plt.errorbar(self.airmass, y, yerr=m_err, fmt='o', label='Data')
+        plt.errorbar(self.airmass, y, yerr=self.m_err, fmt='o', label='Data')
         x_fit = np.linspace(min(self.airmass), max(self.airmass), 100)
         y_fit = Z + k * x_fit
         plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
@@ -366,7 +364,7 @@ class Airmass:
         plt.grid()
         plt.show()
 
-    def plot_parameter_space(self, Vmag, m_inst, m_err, exptime):
+    def plot_parameter_space(self):
         '''
         Plot parameter space for extinction coefficient (k) and zero-point (Z)
         as rings of standard deviations (1σ, 2σ, 3σ).
@@ -388,12 +386,7 @@ class Airmass:
         None
         '''
 
-        k_best, Z_best, Z1_best, k_err, Z_err = self.fit_extinction_weighted(
-            Vmag,
-            m_inst,
-            m_err,
-            exptime
-        )
+        k_best, Z_best, Z1_best, k_err, Z_err = self.fit_extinction_weighted()
 
         k_vals = np.linspace(k_best - 3*k_err, k_best + 3*k_err, 100)
         Z_vals = np.linspace(Z_best - 3*Z_err, Z_best + 3*Z_err, 100)
@@ -401,12 +394,12 @@ class Airmass:
 
         chi2_map = np.zeros(K.shape)
 
-        y = Vmag - m_inst
+        y = self.Vmag - self.m_inst
 
         for i in range(K.shape[0]):
             for j in range(K.shape[1]):
                 model = ZM[i,j] + K[i,j] * self.airmass
-                chi2_map[i,j] = np.sum(((y - model) / m_err) ** 2)
+                chi2_map[i,j] = np.sum(((y - model) / self.m_err) ** 2)
 
         chi2_min = np.min(chi2_map)
         delta_chi2 = chi2_map - chi2_min
