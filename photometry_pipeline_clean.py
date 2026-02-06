@@ -100,13 +100,13 @@ class CepheidPhotometryPipeline:
             
             # Aperture photometry
             ap_radius = 2.0 * fwhm
-            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture__photometry(
-                data=ap.data,
+            target_flux, sky_per_pix, ap_area, ann_area = ap.aperture__photometry(
+                data = ap.data,
                 centroid=centroid_global,
                 ap_rad=ap_radius,
                 ceph_name=f"cepheid_{cepheid_id}",
                 date=fits_path.parent.name,
-                plot=False
+                plot=True
             )
             
             # Calculate magnitude and error
@@ -145,7 +145,6 @@ class CepheidPhotometryPipeline:
         """
         ny, nx = data.shape
         
-        # Use numpy's round, then convert to int
         x0 = int(np.round(x_center))
         y0 = int(np.round(y_center))
         
@@ -217,10 +216,11 @@ class CepheidPhotometryPipeline:
                     print(f"    ✓ mag = {result['magnitude']:.3f} ± {result['magnitude_error']:.3f}")
             
             # Save this night's results
+            
             if night_results:
                 df = pd.DataFrame(night_results)
                 df = df.sort_values(by=["name", "time"]).reset_index(drop=True)
-                csv_path = date_output_dir / f"{date}_photometry.csv"
+                csv_path = date_output_dir / f"{date}_photometrv3.csv"
                 df.to_csv(csv_path, index=False)
                 print(f"   💾 Saved {len(night_results)} measurements → {csv_path}\n")
         
@@ -266,9 +266,10 @@ def build_cepheid_catalog():
 
 if __name__ == "__main__":
     
+    print(np.log(0))
     # Configuration
     DATA_DIR = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_test"
-    OUTPUT_DIR = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_Photometry"
+    OUTPUT_DIR = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_P"
     
     # Build catalog
     print("=" * 60)
@@ -282,3 +283,5 @@ if __name__ == "__main__":
     print("=" * 60)
     pipeline = CepheidPhotometryPipeline(DATA_DIR, OUTPUT_DIR, cepheid_catalog)
     pipeline.run()
+
+   
