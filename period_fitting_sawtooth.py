@@ -57,7 +57,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
             parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, m, w: self.sawtooth_model(t, a, p, m, w, 
                                                                                               period), 
                                                    self.time, self.magnitude, p0=theta, 
-                                                   sigma=self.magnitude_error, absolute_sigma=True)
+                                                   sigma=self.magnitude_error, absolute_sigma=True,
+                                                   maxfev=5000)  # Increase max iterations for sawtooth complexity
 
             param_vals.append(parameters)
             uncertainties = np.sqrt(np.diag(cov)) # uncertainties are square root of covariance matrix diagonals
@@ -257,24 +258,76 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
             ) 
         plt.show()
 
+    def saw_sample_walkers(self, nsamples, flattened_chain, time_array):
+        """
+        Sample random parameter sets from MCMC chain to calculate model spread.
+        
+        Parameters:
+        -----------
+        nsamples : int
+            Number of random samples to draw from posterior
+        flattened_chain : array
+            Flattened MCMC chain of shape (n_samples, n_params)
+        time_array : array
+            Time points where to evaluate the models (can be dense for smooth curves)
+        
+        Returns:
+        --------
+        med_model : array
+            Median model across all sampled parameters
+        spread : array
+            Standard deviation (1-sigma spread) at each time point
+        """
+        models = []
+    
+        # Randomly select nsamples parameter sets from the chain
+        draw = np.floor(np.random.uniform(0, len(flattened_chain), size=nsamples)).astype(int)
+        thetas = flattened_chain[draw]
+        
+        # Generate a model for each sampled parameter set
+        for theta in thetas:
+            a, p, m, w, period = theta
+            mod = self.sawtooth_model(time_array, a, p, m, w, period)
+            models.append(mod)
+        
+        # Calculate statistics across all models
+        spread = np.std(models, axis=0)  # Standard deviation at each time point
+        med_model = np.median(models, axis=0)  # Median model
+        
+        return med_model, spread
+
     def plot_sawtooth_emcee_fit(self):
         """
-        Plot the model returned by emcee.
+        Plot the model returned by emcee with 1-sigma posterior uncertainty band.
         """
         fig, ax = plt.subplots()
 
-        # generate some plotting data
-        x = np.linspace(self.time.min(), self.time.max(), 100)
-        y = self.sawtooth_model(x, self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0)
+        # Generate dense time array for smooth curves
+        x = np.linspace(self.time.min(), self.time.max(), 200)
 
+        # Sample from posterior to get uncertainty bands (on dense grid)
+        med_model, spread = self.saw_sample_walkers(100, self.flat_samples, x)
+
+        # Plot data points 
         ax.errorbar(self.time, self.magnitude, yerr=self.magnitude_error, fmt='o', 
-                    label='Original Data', color='black', capsize=5)
+                    label='Data', color='black', capsize=5, zorder=3)
+        
+        # Plot median model with uncertainty band 
+        ax.plot(x, med_model, label='Median Posterior Model', 
+                color='red', linewidth=2, zorder=2)
+        ax.fill_between(x, med_model - spread, med_model + spread, 
+                        color='grey', alpha=0.5, label=r'$1\sigma$ Posterior Spread', zorder=1)
+        
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
         ax.plot(x, y, label='Modelled Data', color='r')
         ax.legend()
-        ax.invert_yaxis() # brighter -> lower magnitude
+        ax.invert_yaxis()  # brighter -> lower magnitude
         ax.set_title(f"Emcee Sawtooth Fit for Cepheid {self.name}")
+        ax.grid(True, alpha=0.3)
 
         plt.show()
+
+
+    
 
