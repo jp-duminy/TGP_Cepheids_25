@@ -9,7 +9,8 @@ plt.style.use('science')
 plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation
 
 #filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Cepheids Data 3.csv"
-filename = "Cepheids Data 3.csv"
+filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Sawtooth Data.csv"
+#filename = "Cepheids Data 3.csv"
 df = pd.read_csv(filename)
 
 time_list = df["Time"].dropna().astype(str).str.strip().tolist()
@@ -165,15 +166,14 @@ class Finder(Sawtooth_Period_Finder):
                 f"χ² value: {best_chisqu:.3f}\n"
             )
         else:  # sawtooth
-            a0, p0, m0, w0 = best_params
-            a0_err, p0_err, m0_err, w0_err = best_uncertainties
+            a0, p0, m0 = best_params
+            a0_err, p0_err, m0_err = best_uncertainties
             print(
                 f"Chi-Square Best Period for Cepheid {self.name} is {best_period:.4f} days\n"
                 f"Best-fit parameters (Sawtooth):\n"
                 f"Amplitude: {a0:.3f} ± {a0_err:.3f}\n"
                 f"Phase: {p0:.3f} ± {p0_err:.3f}\n"
                 f"Midline: {m0:.3f} ± {m0_err:.3f}\n"
-                f"Width: {w0:.3f} ± {w0_err:.3f}\n"
                 f"χ² value: {best_chisqu:.3f}\n"
             )
         
@@ -212,7 +212,7 @@ class Finder(Sawtooth_Period_Finder):
                 f"  Amplitude: {mc_a:.3f} +{mc_a_err_upper:.3f} -{mc_a_err_lower:.3f}\n"
                 f"  Phase:     {mc_p:.3f} +{mc_p_err_upper:.3f} -{mc_p_err_lower:.3f}\n"
                 f"  Midline:   {mc_m:.3f} +{mc_m_err_upper:.3f} -{mc_m_err_lower:.3f}\n"
-                f"  Width:     {mc_w:.3f} +{mc_w_err_upper:.3f} -{mc_w_err_lower:.3f}\n"
+                f"  Width:     {mc_w:.3f} +{mc_w_err_upper:.3f} - {mc_w_err_lower:.3f}\n"
                 f"Autocorrelation times: {tau}\n"
                 f"Mean autocorrelation time: {np.mean(tau):.3f}\n"
                 f"Alternative best period: {period0}"

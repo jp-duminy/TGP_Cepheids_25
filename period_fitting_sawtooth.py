@@ -25,8 +25,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         Chi-square function taking period as an argument so period may be iterated over.
         """
-        a, p, m, w = theta
-        M_model = self.sawtooth_model(self.time, a, p, m, w, period)
+        a, p, m = theta
+        M_model = self.sawtooth_model(self.time, a, p, m, self.w0, period)
 
         chisq = np.sum(((self.magnitude - M_model) / self.magnitude_error)**2)
 
@@ -41,20 +41,22 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         p_max = 78.14 # days, Soszyński et al. (2024)
         self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
-        self.chisqu_vals = []
         param_vals = []
         param_uncertainties = []
 
+        _, sine_params, _, _ = super().fit_sinusoid()
+
+        self.chisqu_vals = []
+
+        a0, p0, m0 = sine_params
+        
+        self.w0 = 0.7 # width / period are highly degenerate
+
         # hold period fixed and fit other parameters
         for period in self.period_range:
-            # define a very rough initial guess
-            a0 = (np.max(self.magnitude) - np.min(self.magnitude)) / 2 
-            p0 = 0.0
-            m0 = np.median(self.magnitude)
-            w0 = 0.5
-            theta = [a0, p0, m0, w0]
             # lambda function allows period to be held fixed
-            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, m, w: self.sawtooth_model(t, a, p, m, w, 
+            theta = [a0, p0, m0]
+            parameters, cov = scipy.optimize.curve_fit(lambda t, a, p, m: self.sawtooth_model(t, a, p, m, self.w0, 
                                                                                               period), 
                                                    self.time, self.magnitude, p0=theta, 
                                                    sigma=self.magnitude_error, absolute_sigma=True,
@@ -74,7 +76,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         best_chisqu_uncertainties = param_uncertainties[best_period_index]
         best_chisqu = self.chisqu_vals[best_period_index]
 
-        self.a0, self.p0, self.m0, self.w0 = best_chisqu_params
+        self.a0, self.p0, self.m0 = best_chisqu_params
         self.period0 = best_chisqu_period
 
         return best_chisqu_period, best_chisqu_params, best_chisqu_uncertainties, best_chisqu
@@ -127,10 +129,10 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         Generate priors for the posterior distribution that will be sampled from.
         """
-        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0) # range is currently quite large
-        p_min, p_max = -1 * np.pi, np.pi # explores all of phase space
-        m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0) # also quite large
-        w_min, w_max = 0, 1
+        a_min, a_max = 0.1, 3 # range is currently quite large
+        p_min, p_max = 0, 2*np.pi # explores all of phase space
+        m_min, m_max = self.m0 - 0.5, self.m0 + 0.5 # also quite large
+        w_min, w_max = 0.55, 0.85
         period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative
 
         a, p, m, w, period = theta
@@ -160,13 +162,13 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         pos = np.array([self.a0, self.p0, self.m0, self.w0, self.period0]) # stitch into parameter vector
 
         # recreate boundaries from saw_ln_prior
-        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0)
-        p_min, p_max = -np.pi, np.pi
-        m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0)
-        w_min, w_max = 0, 1
-        period_min, period_max = 0.9 * self.period0, 1.1 * self.period0  
+        a_min, a_max = 0.1, 3 # range is currently quite large
+        p_min, p_max = 0, 2*np.pi # explores all of phase space
+        m_min, m_max = self.m0 - 0.5, self.m0 + 0.5 # also quite large
+        w_min, w_max = 0.55, 0.85
+        period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative 
         
-        starting_position = pos + 1e-1 * np.random.randn(nwalkers, ndim)
+        starting_position = pos + 1e-3 * np.random.randn(nwalkers, ndim)
         
         # Clip to ensure all walkers are within bounds
         starting_position[:, 0] = np.clip(starting_position[:, 0], a_min, a_max)
@@ -181,7 +183,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Run the emcee Monte Carlo Markov Chain.
         """
         ndim = 5 # number of dimensions
-        nwalkers = 100 # numbers of walkers to explore parameter space
+        nwalkers = 150 # numbers of walkers to explore parameter space
 
         pos = self.saw_walker_initialisation(nwalkers, ndim)
 
@@ -189,7 +191,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
 
         # first allow walkers to explore parameter space
         print(f"Running burn-in for {self.name}...")
-        pos = sampler.run_mcmc(pos, 100) # small burn-in of 100 steps
+        pos = sampler.run_mcmc(pos, 500) # small burn-in of 100 steps
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
@@ -296,7 +298,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         
         return med_model, spread
 
-    def plot_sawtooth_emcee_fit(self):
+    def saw_plot_emcee_fit(self):
         """
         Plot the model returned by emcee with 1-sigma posterior uncertainty band.
         """
@@ -320,7 +322,6 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         
         ax.set_xlabel('Time [Days]')
         ax.set_ylabel('Corrected Magnitude')
-        ax.plot(x, y, label='Modelled Data', color='r')
         ax.legend()
         ax.invert_yaxis()  # brighter -> lower magnitude
         ax.set_title(f"Emcee Sawtooth Fit for Cepheid {self.name}")
