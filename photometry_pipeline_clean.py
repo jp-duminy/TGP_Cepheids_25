@@ -100,7 +100,7 @@ class CepheidPhotometryPipeline:
             
             # Aperture photometry
             ap_radius = 2.0 * fwhm
-            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture__photometry(
+            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture_photometry(
                 data=ap.data,
                 centroid=centroid_global,
                 ap_rad=ap_radius,
@@ -342,7 +342,7 @@ class StandardStarPhotometryPipeline:
             
             # Aperture photometry
             ap_radius = 2.0 * fwhm
-            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture__photometry(
+            target_flux, ap_area, sky_per_pix, ann_area = ap.aperture_photometry(
                 data=ap.data,
                 centroid=centroid_global,
                 ap_rad=ap_radius,

@@ -79,7 +79,7 @@ class AperturePhotometry:
 
         return centroid, fwhm
     
-    def aperture__photometry(self, data, centroid, ap_rad, ceph_name = None,
+    def aperture_photometry(self, data, centroid, ap_rad, ceph_name = None,
                             date = None, inner=1.5, outer=2, plot = True, savefig = False):
         """Main method: Using the determined centroids and FWHM of the source, Sum the fluxes
         through the circular apertures and annuli."""
@@ -126,7 +126,7 @@ class AperturePhotometry:
 
         for index, factor in enumerate(np.linspace(0.1, 4, 16)):
             aperture_radius[index] = factor*fwhm
-            flux = self.aperture__photometry(data, centroid, ap_rad = factor*fwhm, inner=inner, outer=outer, plot = False)[0]
+            flux = self.aperture_photometry(data, centroid, ap_rad = factor*fwhm, inner=inner, outer=outer, plot = False)[0]
             sky_sub_ap_flux[index] = flux
 
         normalised_ssaf = sky_sub_ap_flux / np.max(sky_sub_ap_flux)
