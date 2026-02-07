@@ -298,6 +298,27 @@ class Sinusoid_Period_Finder:
         self.thin = thin
         self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
 
+        chain_filename = f"chains/{self.name}_sinusoid_chain.npy"
+        np.save(chain_filename, self.flat_samples)
+        print(f"Chain saved to {chain_filename}")
+        
+        # Also save metadata as plain text
+        metadata = {
+            'name': self.name,
+            'model': 'sinusoid',
+            'n_params': ndim,
+            'n_walkers': nwalkers,
+            'n_steps': 10000,
+            'thin': thin,
+            'autocorr_time': tau.tolist() if hasattr(tau, 'tolist') else tau,
+            'chain_shape': self.flat_samples.shape
+        }
+        
+        metadata_filename = f"chains/{self.name}_sinusoid_metadata.txt"
+        with open(metadata_filename, 'w') as f:
+            for key, value in metadata.items():
+                f.write(f"{key}: {value}\n")
+
         quantiles = [2.5, 50, 97.5]  # 0.025-0.975 is ~ 2σ gaussian error
         lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
 
