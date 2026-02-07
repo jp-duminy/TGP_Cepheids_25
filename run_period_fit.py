@@ -199,11 +199,11 @@ class Finder(Sawtooth_Period_Finder):
             )
         else:  # sawtooth
             params, errors, tau, period0 = self.saw_run_mcmc()
-            mc_a, mc_p, mc_m, mc_w, mc_period = params
+            mc_a, mc_p, mc_m, mc_period = params
             
             upper_errors, lower_errors = errors
-            mc_a_err_upper, mc_p_err_upper, mc_m_err_upper, mc_w_err_upper, mc_period_err_upper = upper_errors
-            mc_a_err_lower, mc_p_err_lower, mc_m_err_lower, mc_w_err_lower, mc_period_err_lower = lower_errors
+            mc_a_err_upper, mc_p_err_upper, mc_m_err_upper, mc_period_err_upper = upper_errors
+            mc_a_err_lower, mc_p_err_lower, mc_m_err_lower, mc_period_err_lower = lower_errors
             
             print(
                 f"Emcee Best Period for Cepheid {self.name}:\n"
@@ -212,7 +212,6 @@ class Finder(Sawtooth_Period_Finder):
                 f"  Amplitude: {mc_a:.3f} +{mc_a_err_upper:.3f} -{mc_a_err_lower:.3f}\n"
                 f"  Phase:     {mc_p:.3f} +{mc_p_err_upper:.3f} -{mc_p_err_lower:.3f}\n"
                 f"  Midline:   {mc_m:.3f} +{mc_m_err_upper:.3f} -{mc_m_err_lower:.3f}\n"
-                f"  Width:     {mc_w:.3f} +{mc_w_err_upper:.3f} - {mc_w_err_lower:.3f}\n"
                 f"Autocorrelation times: {tau}\n"
                 f"Mean autocorrelation time: {np.mean(tau):.3f}\n"
                 f"Alternative best period: {period0}"

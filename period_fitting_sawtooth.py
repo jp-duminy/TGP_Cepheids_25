@@ -117,8 +117,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Log-likelihood function that takes a parameter vector as its input and returns the log-likelihood.
         The likelihood function is the probability of the dataset given the parameters.
         """
-        a, p, m, w, period = theta
-        modelled_magnitude = self.sawtooth_model(self.time, a, p, m, w, period)
+        a, p, m, period = theta
+        modelled_magnitude = self.sawtooth_model(self.time, a, p, m, self.w0, period)
         residuals = self.magnitude - modelled_magnitude
         constant = np.log(2 * np.pi * self.magnitude_error**2) # constant term added for completeness
 
@@ -132,15 +132,13 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         a_min, a_max = 0.1, 3 # range is currently quite large
         p_min, p_max = 0, 2*np.pi # explores all of phase space
         m_min, m_max = self.m0 - 0.5, self.m0 + 0.5 # also quite large
-        w_min, w_max = 0.55, 0.85
         period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative
 
-        a, p, m, w, period = theta
+        a, p, m, period = theta
 
         if (a_min < a < a_max and
         p_min < p < p_max and
         m_min < m < m_max and
-        w_min < w < w_max and
         period_min < period < period_max):
             return 0.0 # ln(1) = 0: flat prior, all values are equally likely
         else:
@@ -159,13 +157,12 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         Uses chi-squared result to determine best initial position for walkers.
         """
-        pos = np.array([self.a0, self.p0, self.m0, self.w0, self.period0]) # stitch into parameter vector
+        pos = np.array([self.a0, self.p0, self.m0, self.period0]) # stitch into parameter vector
 
         # recreate boundaries from saw_ln_prior
         a_min, a_max = 0.1, 3 # range is currently quite large
         p_min, p_max = 0, 2*np.pi # explores all of phase space
         m_min, m_max = self.m0 - 0.5, self.m0 + 0.5 # also quite large
-        w_min, w_max = 0.55, 0.85
         period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative 
         
         starting_position = pos + 1e-3 * np.random.randn(nwalkers, ndim)
@@ -174,15 +171,14 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         starting_position[:, 0] = np.clip(starting_position[:, 0], a_min, a_max)
         starting_position[:, 1] = np.clip(starting_position[:, 1], p_min, p_max)
         starting_position[:, 2] = np.clip(starting_position[:, 2], m_min, m_max)
-        starting_position[:, 3] = np.clip(starting_position[:, 3], w_min, w_max)
-        starting_position[:, 4] = np.clip(starting_position[:, 4], period_min, period_max)
+        starting_position[:, 3] = np.clip(starting_position[:, 3], period_min, period_max)
         return starting_position
     
     def saw_run_mcmc(self):
         """
         Run the emcee Monte Carlo Markov Chain.
         """
-        ndim = 5 # number of dimensions
+        ndim = 4 # number of dimensions
         nwalkers = 150 # numbers of walkers to explore parameter space
 
         pos = self.saw_walker_initialisation(nwalkers, ndim)
@@ -214,20 +210,19 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
 
         # the median (0.5) summarises the central tendency of the posterior distribution
-        self.mc_a0, self.mc_p0, self.mc_m0, self.mc_w0, self.mc_period0 = median
+        self.mc_a0, self.mc_p0, self.mc_m0, self.mc_period0 = median
 
         # compute errors from quartiles
         self.mc_a0_err = (upper[0] - median[0], median[0] - lower[0])
         self.mc_p0_err = (upper[1] - median[1], median[1] - lower[1])
         self.mc_m0_err = (upper[2] - median[2], median[2] - lower[2])
-        self.mc_w0_err = (upper[3] - median[3], median[3] - lower[3])
-        self.mc_period0_err = (upper[4] - median[4], median[4] - lower[4])
+        self.mc_period0_err = (upper[3] - median[3], median[3] - lower[3])
         
         errors = (upper - median, median - lower)
         
         log_prob = self.sampler.get_log_prob(thin=self.thin, flat=True)
         best_index = np.argmax(log_prob)
-        a0, p0, o0, w0, period0 = self.flat_samples[best_index]
+        a0, p0, o0, period0 = self.flat_samples[best_index]
         
         return median, errors, tau, period0
 
@@ -236,10 +231,10 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Plots the parameter time series to analyse how long it takes walkers to explore
         parameter space.
         """
-        ndim = 5
-        fig, axes = plt.subplots(5, figsize=(10, 7), sharex=True)
+        ndim = 4
+        fig, axes = plt.subplots(4, figsize=(10, 7), sharex=True)
         samples = self.sampler.get_chain()
-        labels = ["Amplitude","Phase", "Midline", "Width", "Period"]
+        labels = ["Amplitude","Phase", "Midline", "Period"]
         for i in range(ndim):
             ax = axes[i]
             ax.plot(samples[:, :, i], "k", alpha=0.3)
@@ -252,7 +247,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         """
         First diagnostic plot: corner plot to analyse quality of fit.
         """
-        labels = ["Amplitude", "Phase", "Midline", "Width", "Period"]
+        labels = ["Amplitude", "Phase", "Midline", "Period"]
         fig = corner.corner(
             self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
             quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
@@ -288,8 +283,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         
         # Generate a model for each sampled parameter set
         for theta in thetas:
-            a, p, m, w, period = theta
-            mod = self.sawtooth_model(time_array, a, p, m, w, period)
+            a, p, m, period = theta
+            mod = self.sawtooth_model(time_array, a, p, m, self.w0, period)
             models.append(mod)
         
         # Calculate statistics across all models
