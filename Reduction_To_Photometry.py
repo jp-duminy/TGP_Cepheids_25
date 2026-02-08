@@ -193,7 +193,7 @@ if __name__ == "__main__":
                 for ceph_num, coord in ceph_skycoords.items():
 
                     #x_guess, y_guess = wcs.world_to_pixel_values(coord.ra.deg, coord.dec.deg)
-                    x_guess, y_guess = wcs.world_to_pixel_values(coord)
+                    x_guess, y_guess = ap_obj.get_pixel_coords(coord.ra.deg, coord.dec.deg)
                     print(f"Checking Cepheid {ceph_num} at pixel ({x_guess:.1f}, {y_guess:.1f})")
 
                     if not (0 <= x_guess < nx and 0 <= y_guess < ny):
