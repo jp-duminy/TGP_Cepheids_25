@@ -58,7 +58,7 @@ class AperturePhotometry:
         masked_data = mask.cutout(self.data)
     
         if plot == True:
-            plt.imshow(masked_data)
+            plt.imshow(masked_data, norm=LogNorm())
             plt.show()
         
         return masked_data
@@ -78,7 +78,7 @@ class AperturePhotometry:
         #Function expects data to be bkgd subtracted
         #Nan/inf values automatically masked
         if plot == True:
-            plt.imshow(data)
+            plt.imshow(data, norm = LogNorm())
             plt.plot(centroid[0], centroid[1], marker = "+", color = "r")
             plt.show()
 
@@ -102,7 +102,7 @@ class AperturePhotometry:
         # plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis') # Display the image
+            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis' , norm=LogNorm) # Display the image
             target_aperture.plot(ax=ax, color='red')
             sky_annulus.plot(ax=ax, color = "white")
             plt.title(f"{ceph_name} taken on {date}")
