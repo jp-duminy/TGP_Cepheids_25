@@ -78,15 +78,6 @@ class Calibration_Set:
         
         print(f"Master flat shape: {self.master_flat.shape}")
 
-        print(f"Master flat statistics:")
-        print(f"  Min: {np.min(self.master_flat):.4f}")
-        print(f"  Max: {np.max(self.master_flat):.4f}")
-        print(f"  Mean: {np.mean(self.master_flat):.4f}")  # Should be ~1.0
-        print(f"  Median: {np.median(self.master_flat):.4f}")  # Should be ~1.0
-    
-        if np.mean(self.master_flat) < 0.9 or np.mean(self.master_flat) > 1.1:
-            warnings.warn("Master flat normalization is wrong!")
-
         return self.master_flat
 
     def prepare(self):
@@ -106,10 +97,10 @@ class Calibration_Manager:
         self.calibration_sets = {}
         self.night_to_calib_map = {}
 
-    def week_calibrations(self, week_name, binning="binning1x1", filter="V"):
+    def week_calibrations(self, week_name, binning="binning1x1", filter="B"):
         """
         Locate calibration file directories for a specific week.
-        Binning is always 1x1 and filter is always V (for PIRATE telescope data)
+        Binning is always 1x1 and filter is always  (for PIRATE telescope data)
         """
         week_dir = self.calib_dir / week_name / binning
 
@@ -193,8 +184,18 @@ class Cepheid_Data_Organiser:
         Create path to Cepheid directory and find patterns in files of "Cepheid_(#)".
         """
         self.cepheids_directory = Path(cepheids_directory)
-        self.cepheid_pattern = re.compile(r'Cepheids?_(\d+).*?_Filter_V_', re.IGNORECASE)
-    
+        #self.cepheid_pattern = re.compile(r'Cepheids?_N\d+_Standard(\d+)_00_.+?_00_Filter_[VB]_', re.IGNORECASE)
+        #self.cepheid_pattern = re.compile(r'Cepheids?_N(?P<night>\d+)_Standard(?P<stdnum>\d+)_00_(?P<star>.+?)_00_Filter_(?P<filter>[VB])_', re.IGNORECASE)
+        self.cepheid_pattern = re.compile(
+    r'Cepheids?_(?:N(?P<night>\d+)_)?'
+    r'Standard(?P<stdnum>\d+)_00_'
+    r'(?P<star>.+?)_00_'
+    r'Filter_B_',
+    re.IGNORECASE
+)
+
+
+
     def list_observation_nights(self):
         """
         Sort all directories for nights in the Cepheids directory
@@ -204,18 +205,27 @@ class Cepheid_Data_Organiser:
         return nights
 
     def organise_night(self, night_directory):
-        """
-        Organise each night's files based on Cepheid number
-        """
-        cepheid_files = defaultdict(list)
+        cepheid_files = defaultdict(lambda: {
+            'files': [],
+            'star': None,
+            'filter': None
+        })
         
         for file in sorted(Path(night_directory).glob("*.fits")):
-            pattern_presence = self.cepheid_pattern.search(file.name)
-            if pattern_presence:
-                ceph_num = int(pattern_presence.group(1))
-                cepheid_files[ceph_num].append(file)
-        
+            m = self.cepheid_pattern.search(file.name)
+            if not m:
+                continue
+            
+            std_num = int(m.group('stdnum'))
+            star_name = m.group('star')
+            filter_name = 'B'
+
+            cepheid_files[std_num]['files'].append(file)
+            cepheid_files[std_num]['star'] = star_name
+            cepheid_files[std_num]['filter'] = filter_name
+
         return dict(cepheid_files)
+
     
     def organise_all_nights(self):
         """
@@ -335,7 +345,7 @@ def run_pipeline(
     base_dir,
     night_to_week_mapping,
     binning="binning1x1",
-    filter_name="V",
+    filter_name="B",
     output_dir=None,
     cepheid_nums=None,
     visualise=True
@@ -419,7 +429,11 @@ def run_pipeline(
         night_output.mkdir(parents=True, exist_ok=True)
         
         # process each cepheid individually
-        for ceph_num, all_files in sorted(ceph_data.items()):
+        #for ceph_num, all_files in sorted(ceph_data.items()):
+        for ceph_num, entry in sorted(ceph_data.items()):
+            all_files = entry['files']
+            star_name = entry['star']
+            filter_name = entry['filter']
             # only select requested cepheids
             if cepheid_nums is not None and ceph_num not in cepheid_nums:
                 continue
@@ -459,7 +473,9 @@ def run_pipeline(
             )
             
             # save file
-            save_path = night_output / f"cepheid_{ceph_num:02d}_stacked.fits"
+            #save_path = night_output / f"cepheid_{ceph_num:02d}_stacked.fits"
+            save_path = night_output / (f"standard_{ceph_num:02d}_{star_name}_Filter_{filter_name}_stacked.fits")
+
             hdu = fits.PrimaryHDU(stacked, header=combined_header)
             hdu.writeto(save_path, overwrite=True)
             
@@ -570,21 +586,13 @@ if __name__ == "__main__":
     }
 
     cepheid_nums= [
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+    1, 2, 3
     ]
 
     summary, images = run_pipeline(
     base_dir="/storage/teaching/TelescopeGroupProject/2025-26",
     night_to_week_mapping=night_to_week_mapping,
-    output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_test",
+    output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid_standard_stars_B",
     cepheid_nums=cepheid_nums,
     visualise=True
     )
-
-
-
-
-
-
-
-
