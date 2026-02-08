@@ -301,6 +301,11 @@ class Cepheid_Image_Reducer:
         # check whether this is appropriate syntax?
         master_bias = self.calib.master_bias
         master_flat = self.calib.master_flat
+        
+        print(f"\n  Raw science frame:")
+        print(f"    Min: {np.min(trimmed):.1f} ADU")
+        print(f"    Mean: {np.mean(trimmed):.1f} ADU")
+        print(f"    Negative: {np.sum(trimmed < 0)} pixels")
 
         if master_bias is None or master_flat is None:
             raise RuntimeError("Calibrations not prepared. Call prepare() first.")
@@ -311,7 +316,21 @@ class Cepheid_Image_Reducer:
 
         # then apply corrections
         bias_corrected = trimmed - master_bias
+
+            
+        print(f"  After bias subtraction (bias mean={np.mean(master_bias):.1f}):")
+        print(f"    Min: {np.min(bias_corrected):.1f} ADU")
+        print(f"    Mean: {np.mean(bias_corrected):.1f} ADU")
+        print(f"    Negative: {np.sum(bias_corrected < 0)} ({100*np.sum(bias_corrected<0)/bias_corrected.size:.1f}%)")
+
         flat_corrected = bias_corrected / master_flat
+
+            
+        print(f"  After flat correction:")
+        print(f"    Min: {np.min(flat_corrected):.1f} ADU")
+        print(f"    Mean: {np.mean(flat_corrected):.1f} ADU")
+        print(f"    Negative: {np.sum(flat_corrected < 0)} ({100*np.sum(flat_corrected<0)/flat_corrected.size:.1f}%)")
+        
 
         return flat_corrected, header
     
