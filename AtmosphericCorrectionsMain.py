@@ -91,7 +91,7 @@ def fit_extinction_weighted(airmass, Vmag, m_inst, m_err):
 # Plotting atmospheric extinction fit
 # ------------------------------------------------------------
 
-def plot_atmospheric_extinction(airmass, Vmag, counts, count_err, exptime):
+def plot_atmospheric_extinction(airmass, Vmag, m_inst, m_err):
     """
     Plot atmospheric extinction fit.
 
@@ -113,15 +113,13 @@ def plot_atmospheric_extinction(airmass, Vmag, counts, count_err, exptime):
     k, Z, Z1, k_err, Z_err = fit_extinction_weighted(
         airmass,
         Vmag,
-        counts,
-        count_err,
-        exptime
+        m_inst,
+        m_err
     )
 
-    m_inst = -2.5 * np.log10(counts / exptime)
     y = Vmag - m_inst
 
-    plt.errorbar(airmass, y, yerr=1.086 * (count_err / counts), fmt='o', label='Data')
+    plt.errorbar(airmass, y, yerr=m_err, fmt='o', label='Data')
     x_fit = np.linspace(min(airmass), max(airmass), 100)
     y_fit = Z + k * x_fit
     plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
@@ -135,7 +133,7 @@ def plot_atmospheric_extinction(airmass, Vmag, counts, count_err, exptime):
 #-------------------------------------------------------------
 # Plot Parameter Space for k and Z as rings of standard deviations
 #-------------------------------------------------------------
-def plot_parameter_space(airmass, Vmag, counts, count_err, exptime):
+def plot_parameter_space(airmass, Vmag, m_inst, m_err):
     '''
     Plot parameter space for extinction coefficient (k) and zero-point (Z)
     as rings of standard deviations (1σ, 2σ, 3σ).
@@ -160,9 +158,8 @@ def plot_parameter_space(airmass, Vmag, counts, count_err, exptime):
     k_best, Z_best, Z1_best, k_err, Z_err = fit_extinction_weighted(
         airmass,
         Vmag,
-        counts,
-        count_err,
-        exptime
+        m_inst,
+        m_err
     )
 
     k_vals = np.linspace(k_best - 3*k_err, k_best + 3*k_err, 100)
@@ -171,9 +168,7 @@ def plot_parameter_space(airmass, Vmag, counts, count_err, exptime):
 
     chi2_map = np.zeros(K.shape)
 
-    m_inst = -2.5 * np.log10(counts / exptime)
     y = Vmag - m_inst
-    m_err = 1.086 * (count_err / counts)
 
     for i in range(K.shape[0]):
         for j in range(K.shape[1]):

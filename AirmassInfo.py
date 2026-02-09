@@ -113,4 +113,4 @@ class AirmassInfo:
                 f"Airmass;       {airmass:.2f}\n"
             )
 
-            return block
+            return airmass
