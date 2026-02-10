@@ -307,14 +307,15 @@ class SinglePhotometry:
         print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         self.diagnose_wcs()
         # cut out a 100x100 rectangle containing the star
-        masked_data = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, plot=True)
+        masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, plot=True)
 
-        centroid, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=True)
+        centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=True)
+        centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset)
 
-        ap_rad = self.curve_of_growth(masked_data, centroid, fwhm, inner=1.5, outer=2.0, plot=True)
+        ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=True)
 
         flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
-            masked_data, centroid, ap_rad, ceph_name=self.name, date=self.date,
+            self.ap.data, centroid_global, ap_rad, ceph_name=self.name, date=self.date,
             inner=1.5, outer=2.0, plot=True, savefig=False
         )
 

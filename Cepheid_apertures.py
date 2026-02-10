@@ -52,17 +52,24 @@ class AperturePhotometry:
         #NB: FITS file might by upside down by the time this is used, could cause issues. 
     
     def mask_data_and_plot(self, x, y, width, plot = False):
-        """Set boolean mask to cut out a square shape around the target, to remove
-        other sources. Plot masked data as heatmap if plot == True, don't otherwise"""
+        """
+        Set boolean mask to cut out a square shape around the target, to remove
+        other sources. Plot masked data as heatmap if plot == True, don't otherwise
+        """
+        # set rectangular aperture
         aperture = rect_ap((x,y), width, width)
+        # mask image
         mask = aperture.to_mask(method = "center")
+        # cut out a box of that image
         masked_data = mask.cutout(self.data)
+        # extract the offsets
+        x_offset, y_offset = mask.bbox.ixmin, mask.bbox.iymin
     
         if plot == True:
             plt.imshow(masked_data, norm=LogNorm())
             plt.show()
         
-        return masked_data
+        return masked_data, x_offset, y_offset
 
     def get_centroid_and_fwhm(self, data, name, plot = False):
         """
