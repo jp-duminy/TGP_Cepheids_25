@@ -171,7 +171,7 @@ class SinglePhotometry:
         
         return airmass
 
-    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=3.0, plot=True):
+    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=6.0, plot=True):
         """
         Uses DAOStarFinder with an initial guess to locate the target star in the image.
         Most stars seem to have fwhm ~ 4.0 so we'll run with that.
@@ -180,9 +180,9 @@ class SinglePhotometry:
         """
         raw_data = self.ap.data * self.exp_time # DAOStarFinder prefers the raw data rather than normalised counts.
 
-        mean, median, std = sigma_clipped_stats(raw_data, sigma=sigma)
+        mean, median, std = sigma_clipped_stats(self.ap.data, sigma=sigma)
         daofind = DAOStarFinder(fwhm=fwhm, threshold=sigma * std)
-        sources = daofind(raw_data - median)
+        sources = daofind(self.ap.data - median)
 
         # find the distances from stars in the image to where the initial guess was
         distances = np.sqrt((sources['xcentroid'] - x_guess)**2 + 
@@ -206,7 +206,8 @@ class SinglePhotometry:
                     cmap='gray')
             all_aps.plot(ax=ax, color='blue', lw=0.8, alpha=0.4)
             target_ap.plot(ax=ax, color='red', lw=1.5, label=f"{self.name}")
-            ax.set_title(f"{self.name} Full Image: ({len(sources)} Sources Detected)")
+            ax.set_title(f"{self.date} {self.name} Full Image: ({len(sources)} Sources Detected)")
+            ax.legend(facecolor='white', edgecolor='black', framealpha=0.5)
             plt.show()
 
         return x_coord, y_coord
@@ -215,7 +216,7 @@ class SinglePhotometry:
         """
         Determine the optimal aperture size from a curve-of-growth plot.
         """
-        ap_radii = np.arange(0.1, 5.1, 0.05) * fwhm # do a broad range of apertures
+        ap_radii = np.arange(0.1, 5.1, 0.1) * fwhm # do a broad range of apertures
         fluxes = []
         bckgnds = []
 
@@ -262,19 +263,23 @@ class SinglePhotometry:
         x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough)
         print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         # cut out a 100x100 rectangle containing the star
-        masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, plot=True)
+        masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, 
+                                                                     name=self.name, date=self.date, plot=False)
 
         # use centroiding to find the exact sub-pixel centre of the star
         centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=True) # centroid for cutout
         centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset) # centroid for full image
 
         # compute optimal aperture size from curve-of-growth analysis
-        ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=True)
+        ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=False)
+
+        print(f"FWHM for {self.name}: {fwhm:.3f}\n")
+        print(f"Aperture size for {self.name}: {ap_rad:.3f}")
 
         # extract flux via full aperture photometry
         flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
             masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
-            inner=1.5, outer=2.0, plot=True, savefig=False
+            inner=1.5, outer=2.0, plot=False, savefig=False
         )
 
         # compute instrumental magnitudes and errors
@@ -349,7 +354,7 @@ class Corrections:
                 ebv=std_data["e(b-v)"], # might want to make this zero
                 )
                 
-                m_inst, m_err = phot.raw_photometry(width=50)
+                m_inst, m_err = phot.raw_photometry(width=150)
                 airmass = phot.get_airmass()
 
                 result = {

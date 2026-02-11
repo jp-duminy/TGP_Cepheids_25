@@ -1,5 +1,4 @@
 #Night 2025-09-22
-from distro import name
 from matplotlib.dates import TU
 
 def get_pixel_guess(catalogue, star_id):
@@ -611,7 +610,7 @@ standard_catalogue_2025_10_13 = {
         "mag": "12.36",
         "e(b-v)": "0.0049",
         "x-coord": "2343.6508",
-        "y-coord": "1638.89.08"
+        "y-coord": "1638.08"
     }
 }
 
