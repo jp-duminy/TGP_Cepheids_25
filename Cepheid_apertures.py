@@ -51,7 +51,7 @@ class AperturePhotometry:
         return x, y
         #NB: FITS file might by upside down by the time this is used, could cause issues. 
     
-    def mask_data_and_plot(self, x, y, width, plot = False):
+    def mask_data_and_plot(self, x, y, width, name, date, plot = False):
         """
         Set boolean mask to cut out a square shape around the target, to remove
         other sources. Plot masked data as heatmap if plot == True, don't otherwise
@@ -67,6 +67,7 @@ class AperturePhotometry:
     
         if plot == True:
             plt.imshow(masked_data, norm=LogNorm())
+            plt.title(f"{width}pix cutout of {name} on {date}")
             plt.show()
         
         return masked_data, x_offset, y_offset
@@ -79,12 +80,15 @@ class AperturePhotometry:
         """
 
         subtracted = data - np.mean(data) # this does not need to be precise
+        _, median_bg, _= sigma_clipped_stats(data, sigma=4.0)
+        subtracted = data - median_bg
         centroid = centroid_2dg(subtracted) #Should be masked
         fwhm = psf.fit_fwhm(data = subtracted, xypos = centroid).item()
         #Function expects data to be bkgd subtracted
         #Nan/inf values automatically masked
         if plot == True:
-            plt.imshow(data, norm = LogNorm())
+            plt.imshow(subtracted, origin='lower', cmap='viridis',
+                       vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
             plt.plot(centroid[0], centroid[1], marker = "+", color = "r")
             plt.title(f"Centroid for {name}")
             plt.show()
@@ -106,13 +110,17 @@ class AperturePhotometry:
         #inner/outer are multiplicative constants to scale the size of the aperture.
         #Inner should be ~1.5, outer ~2.
 
+        _, median_bg, _= sigma_clipped_stats(data, sigma=4.0)
+        subtracted = data - median_bg
+
         # plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis' , norm=LogNorm()) # Display the image
+            ax.imshow(subtracted, origin='lower', interpolation='nearest', cmap='viridis',
+                      vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
             target_aperture.plot(ax=ax, color='red')
             sky_annulus.plot(ax=ax, color = "white")
-            plt.title(f"{ceph_name} taken on {date}")
+            plt.title(f"Sky-subtracted {ceph_name} taken on {date}")
             if savefig == True:
                 plt.savefig(f"{ceph_name}_{date}")
             plt.show()
@@ -367,7 +375,7 @@ class Airmass:
 
         plt.errorbar(self.airmass, y, yerr=self.m_err, fmt='o', label='Data')
         x_fit = np.linspace(min(self.airmass), max(self.airmass), 100)
-        y_fit = Z1 + k * x_fit + 2
+        y_fit = Z1 + k * x_fit
         plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
         plt.xlabel('Airmass')
         plt.ylabel('V - m_inst')
