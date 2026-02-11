@@ -109,7 +109,7 @@ class AperturePhotometry:
         # plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis' , norm=LogNorm) # Display the image
+            ax.imshow(data, origin='lower', interpolation='nearest', cmap='viridis' , norm=LogNorm()) # Display the image
             target_aperture.plot(ax=ax, color='red')
             sky_annulus.plot(ax=ax, color = "white")
             plt.title(f"{ceph_name} taken on {date}")
@@ -139,10 +139,8 @@ class AperturePhotometry:
     
     def curve_of_growth(self, data, ceph_name, date, savefig = False):
         """
-        To calculate and plot the sky-subtracted flux obtained in a series
-        of increasingly large apertures.
+        NOW DEFUNCT!!!
         """
-
         aperture_radius = np.zeros(16)
         sky_sub_ap_flux = np.zeros(16)
         inner = 1.4
@@ -332,6 +330,8 @@ class Airmass:
         w = 1 / self.m_err**2
         #use statsmodels for weighted least squares to get uncertainties (for more details see https://www.geeksforgeeks.org/machine-learning/weighted-least-squares-regression-in-python/)
         X_sm = sm.add_constant(X)
+        print(type(X_sm), X_sm)
+        print(type(w), w)
         wls_model = sm.WLS(y, X_sm, weights=w)
         results = wls_model.fit()
         Z, k = results.params
@@ -361,13 +361,13 @@ class Airmass:
         """
         import matplotlib.pyplot as plt
 
-        k, Z, Z1, k_err, Z_err = self.fit_extinction_weighted()
+        k, Z1, k_err, Z_err = self.fit_extinction_weighted()
 
         y = self.Vmag - self.m_inst
 
         plt.errorbar(self.airmass, y, yerr=self.m_err, fmt='o', label='Data')
         x_fit = np.linspace(min(self.airmass), max(self.airmass), 100)
-        y_fit = Z + k * x_fit
+        y_fit = Z1 + k * x_fit + 2
         plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
         plt.xlabel('Airmass')
         plt.ylabel('V - m_inst')
@@ -398,10 +398,10 @@ class Airmass:
         None
         '''
 
-        k_best, Z_best, Z1_best, k_err, Z_err = self.fit_extinction_weighted()
+        k_best, Z1_best, k_err, Z_err = self.fit_extinction_weighted()
 
         k_vals = np.linspace(k_best - 3*k_err, k_best + 3*k_err, 100)
-        Z_vals = np.linspace(Z_best - 3*Z_err, Z_best + 3*Z_err, 100)
+        Z_vals = np.linspace(Z1_best - 3*Z_err, Z1_best + 3*Z_err, 100)
         K, ZM = np.meshgrid(k_vals, Z_vals)
 
         chi2_map = np.zeros(K.shape)
@@ -421,7 +421,7 @@ class Airmass:
                         Line2D([0], [0], color='orange', lw=2),
                         Line2D([0], [0], color='red', lw=2)]
         plt.legend(custom_lines, ['1σ', '2σ', '3σ'])
-        plt.plot(k_best, Z_best, '.', markersize=10, label='Best Fit')
+        plt.plot(k_best, Z1_best, '.', markersize=10, label='Best Fit')
         plt.xlabel('Extinction Coefficient k')
         plt.ylabel('Zero-point Z')
         plt.title('Parameter Space for k and Z')

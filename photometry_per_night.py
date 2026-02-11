@@ -146,7 +146,7 @@ andromeda_catalogue = {
 }
 
 # directories
-input_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/2025-10-14" # change to the name of the night
+input_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/2025-10-06" # change to the name of the night
 output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Photometry" # where we store the results
 
 class PhotometryDataManager:
@@ -208,6 +208,7 @@ class SinglePhotometry:
         self.fits_path = Path(fits_path)
         self.name = name
         self.ebv = ebv
+        self.date = Path(input_dir).name
 
         coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame='icrs')
         self.ra = coord.ra.deg  # decimal degrees
@@ -266,7 +267,7 @@ class SinglePhotometry:
         """
         Determine the optimal aperture size from a curve-of-growth plot.
         """
-        ap_radii = np.arange(0.1, 4.1, 0.1) * fwhm
+        ap_radii = np.arange(0.1, 6.1, 0.05) * fwhm
         fluxes = []
         bckgnds = []
 
@@ -274,7 +275,7 @@ class SinglePhotometry:
             flux, _, bckgnd, _ = self.ap.aperture_photometry(
                 data, centroid, ap_rad=radius, 
                 inner=inner, outer=outer, plot=False
-            )[0]
+            )
             fluxes.append(flux if flux is not None else 0)
             bckgnds.append(bckgnd)
 
@@ -282,21 +283,29 @@ class SinglePhotometry:
         normalised_ssaf = bckgnds / np.max(bckgnds)
 
         fluxes = np.array(fluxes)
+
+
+        valid_mask = ~np.isnan(fluxes).flatten()
+
+        fluxes = fluxes[valid_mask]
+        ap_radii = ap_radii[valid_mask]
+
         max_flux = np.max(fluxes)
-        target_flux = 0.90 * max_flux
+        target_flux = 0.9 * max_flux
+
+        print(f"Max flux: {max_flux}, target flux: {target_flux}")
 
         idx = np.argmax(fluxes >= target_flux)
         optimal_radius = ap_radii[idx]
 
         if plot:
-            plt.plot(ap_radii, normalised_ssaf, color='red', marker='o')
+            plt.plot(ap_radii, fluxes, color='red', marker='o')
             plt.xlabel('Aperture Radius [pix]')
             plt.ylabel('Sky-Subtracted Flux through Aperture [Arbitrary Units]')
             plt.title("Normalised curve of growth")
             plt.show()
 
         return optimal_radius
-
 
     def raw_photometry(self, width=200):
         """
@@ -306,16 +315,21 @@ class SinglePhotometry:
         x_guess, y_guess = self.ap.get_pixel_coords(self.ra, self.dec)
         print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         self.diagnose_wcs()
-        # cut out a 100x100 rectangle containing the star
+        # cut out a 200x200 rectangle containing the star
         masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, plot=True)
 
         centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=True)
         centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset)
 
+        #PSF diagnostic
+        print(f"The fwhm of {self.name} is {fwhm}")
+
         ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=True)
 
+        print(f"Aperture radius is {ap_rad} pix")
+
         flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
-            self.ap.data, centroid_global, ap_rad, ceph_name=self.name, date=self.date,
+            masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
             inner=1.5, outer=2.0, plot=True, savefig=False
         )
 
@@ -323,6 +337,8 @@ class SinglePhotometry:
         instrumental_mag_error = self.ap.get_inst_mag_error(flux, ap_area, sky_bckgnd, annulus_area,
                                                             self.gain, self.exp_time, self.read_noise, self.stack_size)
         
+        print(f"Instrumental magnitude for {self.name}: {instrumental_mag} +/- {instrumental_mag_error}")
+
         return instrumental_mag, instrumental_mag_error
 
     def dust_correction(self):
@@ -387,6 +403,7 @@ class Corrections:
 
             m_inst, m_err = phot.raw_photometry(width=200)
             airmass = phot.get_airmass()
+            airmass = airmass.value
 
             self.standards_results.append({
             "name": std_id,
