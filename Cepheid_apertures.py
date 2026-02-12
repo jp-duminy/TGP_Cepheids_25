@@ -350,7 +350,7 @@ class Airmass:
         Z_airmass1_err = np.sqrt(Z_err ** 2 + k_err ** 2)
         return k, Z_airmass1, k_err, Z_airmass1_err
         
-    def plot_atmospheric_extinction(self):
+    def plot_atmospheric_extinction(self, k, Z1, k_err, Z1_err):
         """
         Plot atmospheric extinction fit.
 
@@ -367,16 +367,20 @@ class Airmass:
         exptime : array-like
             Exposure times (seconds)
         """
-        import matplotlib.pyplot as plt
-
-        k, Z1, k_err, Z_err = self.fit_extinction_weighted()
 
         y = self.Vmag - self.m_inst
 
         plt.errorbar(self.airmass, y, yerr=self.m_err, fmt='o', label='Data')
-        x_fit = np.linspace(min(self.airmass), max(self.airmass), 100)
-        y_fit = Z1 + k * x_fit
-        plt.plot(x_fit, y_fit, 'r-', label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
+        airmass_min = min(self.airmass)
+        airmass_max = max(self.airmass)
+        airmass_range = airmass_max - airmass_min
+        x_fit = np.linspace(airmass_min - 0.1*airmass_range, airmass_max + 0.1*airmass_range, 100)
+        y_fit = Z1 + k * (x_fit - 1.0)
+        plt.plot(x_fit, y_fit, 'r-', linewidth=2, label=f'Fit: k={k:.3f}±{k_err:.3f}, Z(airmass=1)={Z1:.2f}')
+        #Add shaded region for 1σ uncertainty
+        y_fit_upper = (Z1 + Z1_err) + (k + k_err) * (x_fit - 1.0)
+        y_fit_lower = (Z1 - Z1_err) + (k - k_err) * (x_fit - 1.0)
+        plt.fill_between(x_fit, y_fit_lower, y_fit_upper, color='r', alpha=0.2)
         plt.xlabel('Airmass')
         plt.ylabel('V - m_inst')
         plt.title('Atmospheric Extinction Fit')
@@ -384,7 +388,7 @@ class Airmass:
         plt.grid()
         plt.show()
 
-    def plot_parameter_space(self):
+    def plot_parameter_space(self, k_best, Z1_best, k_err, Z1_err):
         '''
         Plot parameter space for extinction coefficient (k) and zero-point (Z)
         as rings of standard deviations (1σ, 2σ, 3σ).
@@ -406,32 +410,32 @@ class Airmass:
         None
         '''
 
-        k_best, Z1_best, k_err, Z_err = self.fit_extinction_weighted()
+        k_values = np.linspace(k_best - 5*k_err, k_best + 5*k_err, 100) 
+        Z1_values = np.linspace(Z1_best - 5*Z1_err, Z1_best + 5*Z1_err, 100) 
+        K, Z1 = np.meshgrid(k_values, Z1_values) 
+        chi2 = ((k_best - K) / k_err) ** 2 + ((Z1_best - Z1) / Z1_err) ** 2 
 
-        k_vals = np.linspace(k_best - 3*k_err, k_best + 3*k_err, 100)
-        Z_vals = np.linspace(Z1_best - 3*Z_err, Z1_best + 3*Z_err, 100)
-        K, ZM = np.meshgrid(k_vals, Z_vals)
-
-        chi2_map = np.zeros(K.shape)
-
-        y = self.Vmag - self.m_inst
-
-        for i in range(K.shape[0]):
-            for j in range(K.shape[1]):
-                model = ZM[i,j] + K[i,j] * self.airmass
-                chi2_map[i,j] = np.sum(((y - model) / self.m_err) ** 2)
-
-        chi2_min = np.min(chi2_map)
-        delta_chi2 = chi2_map - chi2_min
-
-        plt.contour(K, ZM, delta_chi2, levels=[2.30, 6.17, 11.8], colors=['blue', 'orange', 'red'])
-        custom_lines = [Line2D([0], [0], color='blue', lw=2),
-                        Line2D([0], [0], color='orange', lw=2),
-                        Line2D([0], [0], color='red', lw=2)]
-        plt.legend(custom_lines, ['1σ', '2σ', '3σ'])
-        plt.plot(k_best, Z1_best, '.', markersize=10, label='Best Fit')
-        plt.xlabel('Extinction Coefficient k')
-        plt.ylabel('Zero-point Z')
-        plt.title('Parameter Space for k and Z')
+        #create contour plot of background (background contour fill completely), with coloured rings for 1σ, 2σ, 3σ confidence intervals
+        plt.contourf(K, Z1, chi2, levels=50, cmap='viridis', alpha=0.5)
+        plt.contour(K, Z1, chi2, levels=[2.28, 6.17, 11.8], colors=['white'], linestyles=['-', '--', ':'], linewidths=2)
+        plt.plot(k_best, Z1_best, 'bo', label='Best Fit')
+        plt.xlabel('Extinction Coefficient (k)')
+        plt.ylabel('Zero-point at Airmass=1 (Z)')
+        plt.title('Parameter Space for Extinction Fit')
+        plt.legend()
+        #add legend for confidence intervals
+        custom_lines = [Line2D([0], [0], color='white', lw=2), Line2D([0], [0], color='white', lw=2, linestyle='--'), Line2D([0], [0], color='white', lw=2, linestyle=':')] 
+        plt.legend(custom_lines, ['1σ (68.3%)', '2σ (95.4%)', '3σ (99.7%)'], loc='upper right')
         plt.grid()
         plt.show()
+
+
+        
+        '''plt.contourf(K, Z1, chi2, levels=[0, 2.28, 6.17, 11.8], colors=['lightblue', 'blue', 'darkblue'], alpha=0.5) 
+        plt.plot(k_best, Z1_best, 'ro', label='Best Fit') 
+        plt.xlabel('Extinction Coefficient (k)') 
+        plt.ylabel('Zero-point at Airmass=1 (Z)') 
+        plt.title('Parameter Space for Extinction Fit') 
+        plt.legend() 
+        plt.grid() 
+        plt.show()'''

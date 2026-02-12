@@ -260,14 +260,14 @@ class SinglePhotometry:
         Raw photometry (computes instrumental magnitude and associated error.)
         """
         # locate approximate pixel coordinates of star
-        x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough)
+        x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough, plot=False)
         print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         # cut out a 100x100 rectangle containing the star
         masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, 
                                                                      name=self.name, date=self.date, plot=False)
 
         # use centroiding to find the exact sub-pixel centre of the star
-        centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=True) # centroid for cutout
+        centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=False) # centroid for cutout
         centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset) # centroid for full image
 
         # compute optimal aperture size from curve-of-growth analysis
@@ -384,8 +384,8 @@ class Corrections:
         )
 
         k, Z1, k_err, Z1_err = airmass_fitter.fit_extinction_weighted()
-        airmass_fitter.plot_atmospheric_extinction()
-        airmass_fitter.plot_parameter_space()
+        airmass_fitter.plot_atmospheric_extinction(k, Z1, k_err, Z1_err)
+        airmass_fitter.plot_parameter_space(k, Z1, k_err, Z1_err)
 
         calibration = {
         "k": k,
