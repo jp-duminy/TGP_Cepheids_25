@@ -439,3 +439,55 @@ class Airmass:
         plt.legend() 
         plt.grid() 
         plt.show()'''
+    
+    def plot_residuals(self, k, Z1):
+        """ Plot residuals of atmospheric extinction fit. 
+        
+        Parameters 
+        ---------- 
+        airmass : array-like Airmass values 
+        Vmag: array-like 
+        Catalog V magnitudes counts : array-like 
+        Measured counts count_err : array-like 
+        Uncertainty in counts exptime : array-like 
+        Exposure times (seconds) 
+        
+        Returns 
+        ------- 
+        None 
+        """
+        y = self.Vmag - self.m_inst 
+        y_fit = Z1 + k* (self.airmass - 1.0) 
+        residuals = y - y_fit 
+        plt.errorbar(self.airmass, residuals, yerr=self.m_err, fmt='o') 
+        plt.axhline(0, color='r', linestyle='--') 
+        plt.xlabel('Airmass')
+        plt.ylabel('Residuals (V - m_inst - Fit)')
+        plt.title('Residuals of Atmospheric Extinction Fit') 
+        plt.grid() 
+        plt.show()
+
+    def remove_outliers(self, k, Z1, threshold=3): 
+        """Remove outliers from the dataset based on residuals of the fit. 
+        Parameters 
+        ---------- 
+        airmass : array-like Airmass values 
+        Vmag : array-like 
+        Catalog V magnitudes counts : array-like 
+        Measured counts count_err : array-like 
+        Uncertainty in counts exptime : array-like 
+        Exposure times (seconds) k : float 
+        Extinction coefficient from fit 
+        Z1 : float Zero-point at airmass=1 from fit 
+        threshold : float Number of standard deviations to use as cutoff for outliers (default: 3) 
+        
+        Returns 
+        ------- 
+        mask : array-like Boolean mask indicating which data points are not outliers 
+        """ 
+        y = self.Vmag - self.m_inst 
+        y_fit = Z1 + k * (self.airmass - 1.0) 
+        residuals = y - y_fit 
+        std_residuals = np.std(residuals) 
+        mask = np.abs(residuals) > threshold * std_residuals 
+        return mask    

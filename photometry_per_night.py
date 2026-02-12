@@ -367,9 +367,13 @@ class Corrections:
                 }
 
                 self.all_standards.append(result)
+            print(self.all_standards)
 
         # global extinction fit across all nights
         self.standards_df = pd.DataFrame(self.all_standards)
+        #remove standard with id {'ID': 'G93_48', 'V_true': 12.74, 'm_inst': -7.1586712021845, 'm_inst_err': 0.005702656977785718, 'airmass': np.float64(1.2303238241120058), 'ISOT': '2025-10-14T19:42:57.4186109'}, since outlier in data
+        #self.standards_df = self.standards_df[self.standards_df['ID'] != 'G93_48']
+
         print(f"\nTotal standards collected for airmass fit: {len(self.standards_df)}")
 
     def fit_extinction(self):
@@ -386,6 +390,25 @@ class Corrections:
         k, Z1, k_err, Z1_err = airmass_fitter.fit_extinction_weighted()
         airmass_fitter.plot_atmospheric_extinction(k, Z1, k_err, Z1_err)
         airmass_fitter.plot_parameter_space(k, Z1, k_err, Z1_err)
+        airmass_fitter.plot_residuals(k, Z1)
+        outlier_mask = airmass_fitter.remove_outliers(k, Z1)
+        #if there are any outliers, plot the fit again without them to show the improvement.
+        
+        if np.any(outlier_mask): 
+            print(f"Outliers detected: {self.standards_df[outlier_mask]['ID'].values}") 
+            self.standards_df = self.standards_df[~outlier_mask]
+            # refit without outliers
+            airmass_fitter_update = Airmass(
+                airmass = self.standards_df['airmass'].values,
+                Vmag=self.standards_df["V_true"].values,
+                m_inst=self.standards_df["m_inst"].values,
+                m_err=self.standards_df["m_inst_err"].values
+            )
+
+            k, Z1, k_err, Z1_err = airmass_fitter_update.fit_extinction_weighted()
+            airmass_fitter_update.plot_atmospheric_extinction(k, Z1, k_err, Z1_err)
+            airmass_fitter_update.plot_parameter_space(k, Z1, k_err, Z1_err)
+            airmass_fitter_update.plot_residuals(k, Z1)   
 
         calibration = {
         "k": k,
