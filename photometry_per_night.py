@@ -20,7 +20,10 @@ from Cepheid_apertures import AperturePhotometry
 from Cepheid_apertures import Airmass
 from Cepheid_apertures import DustExtinction
 from AirmassInfo import AirmassInfo
+
+# catalogues
 from catalogues import ALL_CATALOGUES, get_catalogues_for_night, get_pixel_guess
+from reference_star_catalogues import reference_catalogue
 
 # updated DAOStarFinder
 from photutils.detection import DAOStarFinder
@@ -171,7 +174,7 @@ class SinglePhotometry:
         
         return airmass
 
-    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=6.0, plot=True):
+    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=6.0, plot=False):
         """
         Uses DAOStarFinder with an initial guess to locate the target star in the image.
         Most stars seem to have fwhm ~ 4.0 so we'll run with that.
@@ -255,23 +258,23 @@ class SinglePhotometry:
 
         return optimal_radius
 
-    def raw_photometry(self, width):
+    def raw_photometry(self, width, plot):
         """
         Raw photometry (computes instrumental magnitude and associated error.)
         """
         # locate approximate pixel coordinates of star
-        x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough, plot=False)
+        x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough, plot=plot)
         print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         # cut out a 100x100 rectangle containing the star
         masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, 
-                                                                     name=self.name, date=self.date, plot=False)
+                                                                     name=self.name, date=self.date, plot=plot)
 
         # use centroiding to find the exact sub-pixel centre of the star
-        centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=False) # centroid for cutout
+        centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=plot) # centroid for cutout
         centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset) # centroid for full image
 
         # compute optimal aperture size from curve-of-growth analysis
-        ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=False)
+        ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=plot)
 
         print(f"FWHM for {self.name}: {fwhm:.3f}\n")
         print(f"Aperture size for {self.name}: {ap_rad:.3f}")
@@ -298,11 +301,11 @@ class SinglePhotometry:
 
         return A_V
 
-    def standard_magnitudes(self, calibrations):
+    def standard_magnitudes(self, calibrations, plot):
         """
         Compute a standard magnitude, appropriately corrected.
         """
-        m_inst, m_inst_err = self.raw_photometry(width=50)
+        m_inst, m_inst_err = self.raw_photometry(width=50, plot=plot)
         airmass = self.get_airmass()
         A_V = self.dust_correction()
 
@@ -323,7 +326,7 @@ class Corrections:
         self.all_standards = []
         self.calibration = None
 
-    def process_standards(self):
+    def process_standards(self, plot):
         """
         Compute instrumental magnitude and its error for standard stars on the night.
         """
@@ -354,7 +357,7 @@ class Corrections:
                 ebv=std_data["e(b-v)"], # might want to make this zero
                 )
                 
-                m_inst, m_err = phot.raw_photometry(width=150)
+                m_inst, m_err = phot.raw_photometry(width=150, plot=plot)
                 airmass = phot.get_airmass()
 
                 result = {
@@ -419,13 +422,174 @@ class Corrections:
 
         return calibration
     
-def main(night):
+class DifferentialCorrections:
+    """
+    Differential photometry: analysing reference stars for each cepheid in order to correct for night-by-night variations.
+    """
+    def __init__(self, cepheid_id, fits_path, reference_catalogue, calibration):
+        self.cepheid_id = cepheid_id
+        self.fits_path = fits_path
+        self.refs = reference_catalogue.get(cepheid_id, {})
+        self.calibration = calibration # standard star airmass correction
+        self.flipped = False
+
+    @staticmethod
+    def flip_coords(x, y):
+        """
+        Flips y-coordinate of the image (images can only be flipped 180 degrees).
+        """
+        img_size = 3996 # size of image after reduction
+        return x, img_size - y
+
+    def get_reference_star_coords(self, ref_data):
+        """
+        Extracts coordinates for five bright reference standard stars.
+        """
+        x = float(ref_data["x-coord"])
+        y = float(ref_data["y-coord"])
+        if self.flipped:
+            x, y = self.flip_coords(x, y)
+        return x, y
+    
+    def count_matches(self, use_flip):
+        """
+        Determines how many bright reference stars are found for a given image orientation.
+        Reuses locate_star code but not too much.
+        """
+        ap = AperturePhotometry(str(self.fits_path))
+        mean, median, std = sigma_clipped_stats(ap.data, sigma=6.0)
+        daofind = DAOStarFinder(fwhm=4.0, threshold=6.0 * std)
+        sources = daofind(ap.data - median)
+
+        if sources is None:
+            return 0
+
+        n_found = 0
+        for _, ref_data in self.refs.items():
+            try:
+                x_g = float(ref_data["x-coord"])
+                y_g = float(ref_data["y-coord"])
+                if use_flip:
+                    x_g, y_g = self.flip_coords(x_g, y_g)
+
+                distances = np.sqrt((sources['xcentroid'] - x_g)**2 +
+                                    (sources['ycentroid'] - y_g)**2)
+                if np.min(distances) < 80: # 80 pix threshold (from workers)
+                    n_found += 1
+            except Exception:
+                continue
+        return n_found
+    
+    def detect_and_correct_flip(self):
+        """
+        Detects whether the image is flipped by checking how many stars are found according to their assigned coordinates.
+        """
+        n_normal = self.count_matches(use_flip=False)
+        if n_normal >= 3: # this threshold should work
+            self.flipped = False
+            return
+
+        n_flipped = self.count_matches(use_flip=True)
+        if n_flipped > n_normal:
+            self.flipped = True
+            print(f"Image flip detected for {self.fits_path.name}")
+        else:
+            self.flipped = False
+            print(f"Reference stars poorly-matched for {self.fits_path.name}")
+
+    def measure_references(self, plot=False):
+        """
+        Compute standard magnitudes of reference stars and compare offset from true value.
+        Provides estimate of empirical error.
+        """
+        # start by detecting whether image is flipped
+        self.detect_and_correct_flip()
+
+        # standard calibrations
+        k = self.calibration["k"]
+        Z1 = self.calibration["Z1"]
+
+        offsets = []
+
+        if plot:
+            ap = AperturePhotometry(str(self.fits_path))
+            fig, ax = plt.subplots(figsize=(8, 8))
+            ax.imshow(ap.data, origin='lower',
+                    norm=LogNorm(vmin=np.median(ap.data),
+                                vmax=np.percentile(ap.data, 99)),
+                    cmap='gray')
+
+        # need extensive error statements in these pipelines to prevent hanging...
+        for ref_id, ref_data in self.refs.items():
+            try:
+                x_g, y_g = self.get_reference_star_coords(ref_data)
+                V_known = float(ref_data["V_true"])
+
+                phot = SinglePhotometry(
+                    fits_path=self.fits_path,
+                    x_rough=x_g,
+                    y_rough=y_g,
+                    name=ref_id,
+                    ebv="0.0", # no dust correction
+                )
+
+                m_inst, m_inst_err = phot.raw_photometry(width=150, plot=False)
+                airmass = phot.get_airmass()
+                m_cal = m_inst + Z1 + k * airmass
+
+                offsets.append(m_cal - V_known)
+
+                if plot:
+                    x_found, y_found = phot.locate_star(x_g, y_g, plot=False)
+                    ref_ap = circ_ap((x_found, y_found), r=8)
+                    ref_ap.plot(ax=ax, color='blue', lw=1.5)
+
+            except Exception as e:
+                print(f"  Reference {ref_id} failed: {e}")
+                continue
+
+        if len(offsets) < 3:
+            raise ValueError(
+                f"Only {len(offsets)} refs succeeded for Cepheid "
+                f"{self.cepheid_id}, need >= 3"
+            )
+
+        self.offsets = np.array(offsets)
+        return self.offsets
+    
+    def compute_offset(self):
+        """
+        Compute the offset of the measured V magnitudes from their true values.
+        """
+        delta = np.median(self.offsets) # remove any wacky outliers
+        delta_err = np.std(self.offsets) / np.sqrt(len(self.offsets))
+        self.delta = delta
+        self.delta_err = delta_err
+        return delta, delta_err
+    
+    def apply(self, ceph_m_calibrated, ceph_m_calibrated_err, plot=False):
+        """
+        Apply the empirical correction to the cepheid magnitude. This is the normalisation.
+        """
+        self.measure_references(plot=plot)
+        self.compute_offset()
+
+        m_corrected = ceph_m_calibrated - self.delta
+        m_corrected_err = np.sqrt(ceph_m_calibrated_err**2 + self.delta_err**2)
+        return m_corrected, m_corrected_err
+
+def main(night, diagnostic_plot=False):
     """
     Runs the full photometry pipeline for a given night.
     """
     corrections = Corrections(output_dir)
-    corrections.process_standards()
+    corrections.process_standards(plot=diagnostic_plot)
     calibration = corrections.fit_extinction()
+
+    # standard calibrations
+    k = calibration["k"]
+    Z1 = calibration["Z1"]
+
 
     cep_cat, _ = get_catalogues_for_night(night)
     if not cep_cat:
@@ -450,14 +614,33 @@ def main(night):
             ebv=cep_data["e(b-v)"],
         )
 
-        m_true, m_err = phot.standard_magnitudes(calibration)
+        # this needs to be done in a somewhat roundabout way
+        m_standard, m_standard_err = phot.standard_magnitudes(calibration, plot=diagnostic_plot)
+
+        # we then basically type out the calibrated/standard magnitude for the differential magnitude
+        m_inst, m_inst_err = phot.raw_photometry(width=150, plot=False)
+        airmass = phot.get_airmass()
+        k, Z1 = calibration["k"], calibration["Z1"]
+        k_err, Z1_err = calibration["k_err"], calibration["Z1_err"]
+
+        m_calibrated = m_inst + Z1 + k * airmass
+
+        diff = DifferentialCorrections(cep_id, cep_file, reference_catalogue, calibration)
+        m_corrected, m_corrected_err = diff.apply(m_calibrated, m_inst_err, plot=diagnostic_plot)
+
+        A_V = phot.dust_correction()
+        m_diff = m_corrected - A_V
+        m_diff_err = np.sqrt(m_corrected_err**2 + (airmass * k_err)**2 + Z1_err**2)
+
         results.append({
             "ID": cep_id,
             "Name": cep_data["name"],
             "Night": night,
             "ISOT": phot.isot_time(),
-            "m_true": m_true,
-            "m_err": m_err
+            "m_standard": m_standard,
+            "m_standard_err": m_standard_err,
+            "m_differential": m_diff,
+            "m_differential_err": m_diff_err,
         })
 
     df = pd.DataFrame(results)
@@ -466,4 +649,4 @@ def main(night):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-10-06")  # put in night syntax as needed
+    main("2025-10-06", plot_diagnostics=True)  # put in night syntax as needed
