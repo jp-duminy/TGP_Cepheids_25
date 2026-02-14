@@ -56,7 +56,7 @@ def input_dir_for(night):
     """
     return f"{base_dir}/{night}"
 
-# store xalibrations to avoid rerunning pipeline
+# store calibrations to avoid rerunning pipeline
 CALIBRATION_FILE = f"{output_dir}/calibration.json"
 
 def save_calibration(calibration, path=CALIBRATION_FILE):
@@ -675,4 +675,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-10-06", diagnostic_plot==True)  # put in night syntax as needed
+    main("2025-10-06", diagnostic_plot=True)  # put in night syntax as needed
