@@ -31,6 +31,7 @@ from photutils.detection import DAOStarFinder
 from astropy.stats import sigma_clipped_stats
 from photutils.aperture import CircularAperture as circ_ap
 from matplotlib.colors import LogNorm
+from photutils.background import Background2D, MedianBackground
 
 # stylistic plots
 import scienceplots
@@ -271,7 +272,7 @@ class SinglePhotometry:
         if plot:
             plt.plot(ap_radii, fluxes, color='red', marker='o')
             plt.xlabel('Aperture Radius [pix]')
-            plt.ylabel('Sky-Subtracted Flux through Aperture [Arbitrary Units]')
+            plt.ylabel('Sky-Subtracted Flux through Aperture [ADU/s]')
             plt.title("Normalised curve of growth")
             plt.show()
 
@@ -297,6 +298,9 @@ class SinglePhotometry:
 
         print(f"FWHM for {self.name}: {fwhm:.3f}\n")
         print(f"Aperture size for {self.name}: {ap_rad:.3f}")
+
+        if plot:
+            self.plot_psf_profile(masked_data, centroid_local, fwhm, self.name)
 
         # extract flux via full aperture photometry
         flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
@@ -337,6 +341,40 @@ class SinglePhotometry:
         m_true_err = np.sqrt(m_inst_err**2 + (airmass * k_err)**2 + Z1_err**2)
 
         return m_true, m_true_err
+
+    def plot_psf_profile(self, data, centroid, fwhm, name):
+        """
+        Radial flux profile centred on the star, with FWHM marked.
+        """
+        y_grid, x_grid = np.mgrid[:data.shape[0], :data.shape[1]]
+        radii = np.sqrt((x_grid - centroid[0])**2 + (y_grid - centroid[1])**2)
+
+        radii_flat = radii.flatten()
+        flux_flat = data.flatten()
+
+        # bin into annular rings
+        max_radius = 5 * fwhm
+        bin_edges = np.arange(0, max_radius, 0.5)
+        bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        binned_flux = np.zeros(len(bin_centres))
+
+        for i in range(len(bin_centres)):
+            mask = (radii_flat >= bin_edges[i]) & (radii_flat < bin_edges[i + 1])
+            if np.any(mask):
+                binned_flux[i] = np.mean(flux_flat[mask])
+
+        # normalise to peak
+        binned_flux /= np.max(binned_flux)
+
+        plt.plot(bin_centres, binned_flux, 'k-', linewidth=1.5)
+        plt.axhline(0.5, color='red', linestyle='--', alpha=0.5)
+        plt.axvline(fwhm / 2, color='blue', linestyle=':', alpha=0.5, label=f'FWHM/2 = {fwhm/2:.1f} px')
+        plt.axvline(-fwhm / 2 + fwhm, color='blue', linestyle=':', alpha=0.5)
+        plt.xlabel('Radius from centroid [pixels]')
+        plt.ylabel('Normalised flux')
+        plt.title(f'Radial PSF profile — {name}')
+        plt.legend()
+        plt.show()
     
 class Corrections:
 
@@ -596,6 +634,22 @@ class DifferentialCorrections:
         m_corrected = ceph_m_calibrated - self.delta
         m_corrected_err = np.sqrt(ceph_m_calibrated_err**2 + self.delta_err**2)
         return m_corrected, m_corrected_err
+    
+def plot_full_sky_subtracted(fits_path, name, date):
+    """
+    Bins the image and sky-subtracts each part individually.
+    """
+    ap = AperturePhotometry(str(fits_path))
+    bkg = Background2D(ap.data, box_size=128, bkg_estimator=MedianBackground())
+    subtracted = ap.data - bkg.background
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(subtracted, origin='lower', cmap='gray',
+            vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
+    ax.set_xlabel('x [pixels]')
+    ax.set_ylabel('y [pixels]')
+    ax.set_title(f"Sky-Subtracted Full Image — {name} ({date})")
+    plt.show()
 
 def main(night, diagnostic_plot=False, refit_calibration=False):
     """
@@ -625,7 +679,12 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     data_manager = PhotometryDataManager(input_dir_for(night), output_dir)
     results = []
 
-    for cep_file in data_manager.find_cepheid_files():
+    cep_files = data_manager.find_cepheid_files()
+
+    if diagnostic_plot and len(cep_files) > 0:
+        plot_full_sky_subtracted(cep_files[0], "field", night)
+
+    for cep_file in cep_files:
         cep_id = data_manager.extract_cepheid_id(cep_file.name)
         if cep_id is None or cep_id not in cep_cat:
             continue
