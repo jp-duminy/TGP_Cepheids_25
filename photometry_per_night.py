@@ -675,4 +675,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-10-06", plot_diagnostics=True)  # put in night syntax as needed
+    main("2025-10-06", diagnostic_plot==True)  # put in night syntax as needed
