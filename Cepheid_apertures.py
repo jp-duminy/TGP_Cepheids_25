@@ -13,6 +13,8 @@ from matplotlib.lines import Line2D
 import AirmassInfo
 from astropy.stats import sigma_clipped_stats
 
+from astropy.visualization import SqrtStretch, ImageNormalize
+
 class AperturePhotometry: 
 
     """A class to perform basic aperture photometry on a dataset, up to and
@@ -87,8 +89,9 @@ class AperturePhotometry:
         #Function expects data to be bkgd subtracted
         #Nan/inf values automatically masked
         if plot == True:
-            plt.imshow(subtracted, origin='lower', cmap='viridis',
-                       vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
+            norm = ImageNormalize(subtracted, stretch=SqrtStretch())
+            ax.imshow(subtracted, origin='lower', interpolation='nearest',
+                    cmap='viridis', norm=norm)
             plt.plot(centroid[0], centroid[1], marker = "+", color = "r")
             plt.title(f"Centroid for {name}")
             plt.show()
@@ -116,8 +119,9 @@ class AperturePhotometry:
         # plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            ax.imshow(subtracted, origin='lower', interpolation='nearest', cmap='viridis',
-                      vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
+            norm = ImageNormalize(subtracted, stretch=SqrtStretch())
+            ax.imshow(subtracted, origin='lower', interpolation='nearest',
+                    cmap='viridis', norm=norm)
             target_aperture.plot(ax=ax, color='red')
             sky_annulus.plot(ax=ax, color = "white")
             plt.title(f"Sky-subtracted {ceph_name} taken on {date}")
