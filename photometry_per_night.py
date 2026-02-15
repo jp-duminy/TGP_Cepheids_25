@@ -340,8 +340,8 @@ class SinglePhotometry:
         k_err = calibrations["k_err"]
         Z1_err = calibrations["Z1_err"]
 
-        m_true = (m_inst - A_V) + Z1 + (k * airmass)
-        m_true_err = np.sqrt(m_inst_err**2 + (airmass * k_err)**2 + Z1_err**2)
+        m_true = (m_inst - A_V) + Z1 + (k * (airmass - 1))
+        m_true_err = np.sqrt(m_inst_err**2 + ((airmass - 1) * k_err)**2 + Z1_err**2)
 
         return m_true, m_true_err
 
@@ -745,14 +745,14 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
         k, Z1 = calibration["k"], calibration["Z1"]
         k_err, Z1_err = calibration["k_err"], calibration["Z1_err"]
 
-        m_calibrated = m_inst + Z1 + k * airmass
+        m_calibrated = m_inst + Z1 + k * (airmass - 1)
 
         diff = DifferentialCorrections(cep_id, cep_file, reference_catalogue, calibration, cepheid_orientation_catalogue[cep_id])
         m_corrected, m_corrected_err = diff.apply(m_calibrated, m_inst_err, plot=diagnostic_plot)
 
         A_V = phot.dust_correction()
         m_diff = m_corrected - A_V
-        m_diff_err = np.sqrt(m_corrected_err**2 + (airmass * k_err)**2 + Z1_err**2)
+        m_diff_err = np.sqrt(m_corrected_err**2 + ((airmass - 1) * k_err)**2 + Z1_err**2)
 
         results.append({
             "ID": cep_id,
