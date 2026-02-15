@@ -64,8 +64,8 @@ class Sinusoid_Period_Finder:
         Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
         other free parameters. Returns best-fit parameters, stores periods and corresponding chi square values.
         """
-        p_min = 1.49107 # days, Breger (1980)
-        p_max = 78.14 # days, Soszyński et al. (2024)
+        p_min = 7 # days, Breger (1980)
+        p_max = 10 # days, Soszyński et al. (2024)
         self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
         self.chisqu_vals = []
@@ -292,7 +292,11 @@ class Sinusoid_Period_Finder:
 
         try:
             tau = self.sampler.get_autocorr_time()
-            thin = int(np.mean(tau) / 2) # thinning helps speed up computing
+            if np.any(np.isnan(tau)):
+                print(f"NaN in autocorrelation, using fixed thin.")
+                thin= 10
+            else:
+                thin = int(np.mean(tau) / 2) # thinning helps speed up computing
         except mc.autocorr.AutocorrError:
             print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
             thin = 10 
@@ -365,7 +369,8 @@ class Sinusoid_Period_Finder:
         fig = corner.corner(
             self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
             quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
-            title_fmt=".3f"
+            title_fmt=".3f",
+            range=[0.99] * self.flat_samples.shape[1]
             ) 
         plt.show()
 

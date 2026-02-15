@@ -112,7 +112,7 @@ class PLRelation:
         """
 
         ndim = 3 # number of dimensions
-        nwalkers = 100 # numbers of walkers to explore parameter space
+        nwalkers = 32 # numbers of walkers to explore parameter space
 
         pos = self.pl_walker_initialisation(nwalkers, ndim)
 
@@ -120,13 +120,13 @@ class PLRelation:
 
         # first allow walkers to explore parameter space
         print(f"Running burn-in for P-L Relation...")
-        pos = sampler.run_mcmc(pos, 100) # small burn-in of 100 steps
+        pos = sampler.run_mcmc(pos, 500) # small burn-in of 100 steps
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
         # with walkers settled in, run the main chain
         print(f"Running production...")
-        sampler.run_mcmc(pos, 10000, progress=True) # progress=True generates a progress bar
+        sampler.run_mcmc(pos, 3000, progress=True) # progress=True generates a progress bar
 
         self.sampler = sampler # keep sampler for analysis of quality of chain
 
@@ -243,11 +243,11 @@ class PLRelation:
         spread = np.std(models, axis=0)
 
         ax.plot(log_p, med_model, 'r-', linewidth=2,
-                label=f'Fit: M = {self.a0:.2f}(log P - 1) + {self.b0:.2f}')
+                label=f'Fit: M = {self.a0:.2f}(log P - 1) {self.b0:.2f}')
         ax.fill_between(log_p, med_model - spread, med_model + spread,
-                        color='red', alpha=0.3, label=r'$1\sigma$')
+                        color='gray', alpha=0.4, label=r'$1\sigma$')
         ax.fill_between(log_p, med_model - 2*spread, med_model + 2*spread,
-                        color='red', alpha=0.15, label=r'$2\sigma$')
+                        color='gray', alpha=0.2, label=r'$2\sigma$')
 
         ax.set_xlabel(r'$\log_{10}$(Period) [days]')
         ax.set_ylabel('Absolute Magnitude')

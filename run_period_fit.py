@@ -14,7 +14,7 @@ plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation
 #filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Sawtooth Data.csv"
 
 
-filename = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/RawData/cepheid_02_V520_Cyg.csv"
+filename = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/RawData/cepheid_11_V636_Cas.csv"
 
 df = pd.read_csv(filename)
 
@@ -244,7 +244,7 @@ class Finder(Sawtooth_Period_Finder):
 
 if __name__ == "__main__":
     finder = Finder(
-        name="V520 Cas",
+        name="V636 Cas",
         time=time_list,
         magnitude=df["m_standard"].values,
         magnitude_error=df["m_standard_err"].values,

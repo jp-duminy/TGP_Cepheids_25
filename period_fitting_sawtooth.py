@@ -39,8 +39,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
         other free parameters. Returns chisqu plot for period range and best-fit parameters.
         """
-        p_min = 1.49107 # days, Breger (1980)
-        p_max = 78.14 # days, Soszyński et al. (2024)
+        p_min = 7 # days, Breger (1980)
+        p_max = 10 # days, Soszyński et al. (2024)
         self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
         param_vals = []
@@ -167,7 +167,7 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         m_min, m_max = self.m0 - 0.5, self.m0 + 0.5 # also quite large
         period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative 
         
-        starting_position = pos + 1e-3 * np.random.randn(nwalkers, ndim)
+        starting_position = pos + 2 * np.random.randn(nwalkers, ndim)
         
         # Clip to ensure all walkers are within bounds
         starting_position[:, 0] = np.clip(starting_position[:, 0], a_min, a_max)
@@ -201,7 +201,11 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
 
         try:
             tau = self.sampler.get_autocorr_time()
-            thin = int(np.mean(tau) / 2) # thinning helps speed up computing
+            if np.any(np.isnan(tau)):
+                print(f"NaN in autocorrelation, using fixed thin.")
+                thin= 10
+            else:
+                thin = int(np.mean(tau) / 2) # thinning helps speed up computing
         except mc.autocorr.AutocorrError:
             print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
             thin = 10 
@@ -274,7 +278,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         fig = corner.corner(
             self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
             quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
-            title_fmt=".3f"
+            title_fmt=".3f",
+            range=[0.99] * self.flat_samples.shape[1]
             ) 
         plt.show()
 
