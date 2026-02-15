@@ -213,7 +213,7 @@ class PLRelation:
     """
     def pl_plot_emcee_fit(self):
         """
-        Plot the P-L relation with each Cepheid in a different colour.
+        Plot the P-L relation with each Cepheid in a different colour and uncertainty bands.
         """
         fig, ax = plt.subplots()
 
@@ -229,11 +229,25 @@ class PLRelation:
                         markersize=8, markeredgecolor='black', markeredgewidth=0.5,
                         label=self.names[i])
 
+        # fit line with uncertainty bands
         all_median_periods = [np.median(p) for p in self.period_posteriors]
         period_range = np.linspace(min(all_median_periods) * 0.9, max(all_median_periods) * 1.1, 100)
-        M_fit = self.pl_model(period_range, self.a0, self.b0)
-        ax.plot(np.log10(period_range), M_fit, 'r-', linewidth=2,
+        log_p = np.log10(period_range)
+
+        # sample from posterior to get spread
+        draw = np.random.randint(0, len(self.flat_samples), size=200)
+        models = np.array([self.pl_model(period_range, self.flat_samples[d, 0], self.flat_samples[d, 1])
+                        for d in draw])
+
+        med_model = np.median(models, axis=0)
+        spread = np.std(models, axis=0)
+
+        ax.plot(log_p, med_model, 'r-', linewidth=2,
                 label=f'Fit: M = {self.a0:.2f}(log P - 1) + {self.b0:.2f}')
+        ax.fill_between(log_p, med_model - spread, med_model + spread,
+                        color='red', alpha=0.3, label=r'$1\sigma$')
+        ax.fill_between(log_p, med_model - 2*spread, med_model + 2*spread,
+                        color='red', alpha=0.15, label=r'$2\sigma$')
 
         ax.set_xlabel(r'$\log_{10}$(Period) [days]')
         ax.set_ylabel('Absolute Magnitude')
