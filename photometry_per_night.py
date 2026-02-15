@@ -306,7 +306,7 @@ class SinglePhotometry:
         # extract flux via full aperture photometry
         flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
             masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
-            inner=1.5, outer=2.0, plot=False, savefig=False
+            inner=1.5, outer=2.0, plot=plot, savefig=False
         )
 
         # compute instrumental magnitudes and errors
@@ -762,4 +762,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-10-06", diagnostic_plot=True)  # put in night syntax as needed
+    main("2025-09-22", diagnostic_plot=True)  # put in night syntax as needed
