@@ -240,7 +240,7 @@ class SinglePhotometry:
         """
         Determine the optimal aperture size from a curve-of-growth plot.
         """
-        ap_radii = np.arange(0.1, 5.1, 0.1) * fwhm # do a broad range of apertures
+        ap_radii = np.arange(0.1, 4.1, 0.05) * fwhm # do a broad range of apertures
         fluxes = []
         bckgnds = []
 
@@ -263,7 +263,7 @@ class SinglePhotometry:
         ap_radii = ap_radii[valid_mask]
 
         max_flux = np.max(fluxes)
-        target_flux = 0.9 * max_flux
+        target_flux = 0.98 * max_flux
 
         print(f"Max flux: {max_flux}, target flux: {target_flux}")
 
@@ -762,4 +762,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-09-22", diagnostic_plot=True)  # put in night syntax as needed
+    main("2025-10-06", diagnostic_plot=True, refit_calibration=True)  # put in night syntax as needed

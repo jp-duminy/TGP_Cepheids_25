@@ -13,7 +13,7 @@ from matplotlib.lines import Line2D
 import AirmassInfo
 from astropy.stats import sigma_clipped_stats
 
-from astropy.visualization import SqrtStretch, ImageNormalize
+from astropy.visualization import PowerStretch, ImageNormalize, ZScaleInterval
 
 class AperturePhotometry: 
 
@@ -68,7 +68,12 @@ class AperturePhotometry:
         x_offset, y_offset = mask.bbox.ixmin, mask.bbox.iymin
     
         if plot == True:
-            plt.imshow(masked_data, norm=LogNorm())
+            fig, ax = plt.subplots()
+            zscale = ZScaleInterval()
+            vmin, vmax = zscale.get_limits(masked_data)
+            norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=PowerStretch(a=2))
+            ax.imshow(masked_data, origin='lower', interpolation='nearest',
+                    cmap='viridis', norm=norm)
             plt.title(f"{width}pix cutout of {name} on {date}")
             plt.show()
         
@@ -82,16 +87,19 @@ class AperturePhotometry:
         """
 
         subtracted = data - np.mean(data) # this does not need to be precise
-        _, median_bg, _= sigma_clipped_stats(data, sigma=4.0)
+        _, median_bg, _= sigma_clipped_stats(data, sigma=6.0)
         subtracted = data - median_bg
         centroid = centroid_2dg(subtracted) #Should be masked
         fwhm = psf.fit_fwhm(data = subtracted, xypos = centroid).item()
         #Function expects data to be bkgd subtracted
         #Nan/inf values automatically masked
         if plot == True:
-            norm = ImageNormalize(subtracted, stretch=SqrtStretch())
+            fig, ax = plt.subplots()
+            zscale = ZScaleInterval()
+            vmin, vmax = zscale.get_limits(subtracted)
+            norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=PowerStretch(a=2))
             ax.imshow(subtracted, origin='lower', interpolation='nearest',
-                    cmap='viridis', norm=norm)
+                    cmap='viridis', vmin=0, vmax=np.percentile(subtracted[subtracted > 0], 99))
             plt.plot(centroid[0], centroid[1], marker = "+", color = "r")
             plt.title(f"Centroid for {name}")
             plt.show()
@@ -119,7 +127,9 @@ class AperturePhotometry:
         # plot apertures
         if plot == True:
             fig, ax = plt.subplots()
-            norm = ImageNormalize(subtracted, stretch=SqrtStretch())
+            zscale = ZScaleInterval()
+            vmin, vmax = zscale.get_limits(subtracted)
+            norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=PowerStretch(a=2))
             ax.imshow(subtracted, origin='lower', interpolation='nearest',
                     cmap='viridis', norm=norm)
             target_aperture.plot(ax=ax, color='red')
