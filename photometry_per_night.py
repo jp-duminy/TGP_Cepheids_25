@@ -215,6 +215,9 @@ class SinglePhotometry:
 
         if distances[min_distance_index] > 30:  # sanity check - nearest star shouldn't be far
             print(f"Nearest source is {distances[min_distance_index]:.1f}px away, using raw guess instead")
+            nearest_x = float(sources['xcentroid'][min_distance_index])
+            nearest_y = float(sources['ycentroid'][min_distance_index])
+            print(f"Nearest source is at x: {nearest_x:.2f}, y: {nearest_y:.2f}")
             return x_guess, y_guess
         
         x_coord, y_coord = float(sources['xcentroid'][min_distance_index]), float(sources['ycentroid'][min_distance_index])
@@ -265,7 +268,7 @@ class SinglePhotometry:
         max_flux = np.max(fluxes)
         target_flux = 0.98 * max_flux
 
-        print(f"Max flux: {max_flux}, target flux: {target_flux}")
+        print(f"Max flux: {max_flux:.3f}, target flux: {target_flux:.3f}")
 
         idx = np.argmax(fluxes >= target_flux) # locate the first aperture that contains 90% of maximum flux
         optimal_radius = ap_radii[idx]
@@ -285,7 +288,6 @@ class SinglePhotometry:
         """
         # locate approximate pixel coordinates of star
         x_guess, y_guess = self.locate_star(self.x_rough, self.y_rough, plot=plot)
-        print(f"X-guess: {x_guess}, Y-guess: {y_guess}.")
         # cut out a 100x100 rectangle containing the star
         masked_data, x_offset, y_offset = self.ap.mask_data_and_plot(x_guess, y_guess, width=width, 
                                                                      name=self.name, date=self.date, plot=plot)
@@ -498,8 +500,8 @@ class DifferentialCorrections:
         """
         Flips y-coordinate of the image (images can only be flipped 180 degrees).
         """
-        img_size = 3996 # size of image after reduction
-        return x, img_size - y
+        img_size = 3995 # size of image after reduction (3995 because image goes from -0.5->3995.5)
+        return img_size - x, img_size - y
 
     def get_reference_star_coords(self, ref_data):
         """
@@ -508,7 +510,9 @@ class DifferentialCorrections:
         x = float(ref_data["x-coord"])
         y = float(ref_data["y-coord"])
         if self.flipped:
+            print(f"Original coords are x: {x}, y: {y}")
             x, y = self.flip_coords(x, y)
+            print(f"Flipped coords are x: {x}, y: {y}")
         return x, y
     
     def check_flip(self):
@@ -522,6 +526,11 @@ class DifferentialCorrections:
         if current_flipstat is None:
             warnings.warn(f"No FLIPSTAT in {self.fits_path.name}")
             return False
+        
+        if current_flipstat != self.reference_flipstat:
+            print(f"Image is flipped!")
+        else:
+            print(f"Image is not flipped.")
         
         return current_flipstat != self.reference_flipstat
     
@@ -762,4 +771,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Results saved to {filename}")
 
 if __name__ == "__main__":
-    main("2025-10-06", diagnostic_plot=True, refit_calibration=True)  # put in night syntax as needed
+    main("2025-09-22", diagnostic_plot=True)  # put in night syntax as needed
