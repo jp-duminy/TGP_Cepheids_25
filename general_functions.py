@@ -6,6 +6,9 @@ class Astro_Functions:
     def magnitude_error(snr: float):
         """
         Compute error on magnitudes.
+
+        DEFUNCT!!!
+        
         """
         return (2.5 / np.log(10)) * (1 / snr)
 
