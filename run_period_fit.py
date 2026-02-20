@@ -14,7 +14,7 @@ plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation
 #filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Sawtooth Data.csv"
 
 
-filename = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/RawData/cepheid_11_V636_Cas.csv"
+filename = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/CalibratedData/cepheid_01_MW_Cyg.csv"
 
 df = pd.read_csv(filename)
 
@@ -44,6 +44,15 @@ class Finder(Sawtooth_Period_Finder):
 
         return chisqu + n_params * np.log(n)
     
+    def reduced_chisqu(self, chisqu, n_params):
+        """
+        Computes reduced chi-square statistic. Nice and simple.
+        """
+        n = len(self.magnitude)
+        dof = n - n_params
+
+        return chisqu / dof
+    
     def compare_period_fit(self):
         #sine_period, sine_params, sine_uncertainties, sine_chisqu = self.finder.fit_sinusoid()
 
@@ -54,7 +63,9 @@ class Finder(Sawtooth_Period_Finder):
         # Calculate BIC for both models
         n = len(self.magnitude) # number of datapoints
         sine_bic = self.bayesian_information_criterion(sine_chisqu, n_params=4)
-        saw_bic = self.bayesian_information_criterion(saw_chisqu, n_params=5)
+        sine_red_chisqu = self.reduced_chisqu(sine_chisqu, n_params=4)
+        saw_bic = self.bayesian_information_criterion(saw_chisqu, n_params=4)
+        saw_red_chisqu = self.reduced_chisqu(saw_chisqu, n_params=4)
 
         # Determine which model is better (lower BIC)
         if sine_bic < saw_bic:
@@ -63,6 +74,7 @@ class Finder(Sawtooth_Period_Finder):
             best_params = sine_params
             best_uncertainties = sine_uncertainties
             best_chisqu = sine_chisqu
+            red_chisqu = sine_red_chisqu
             delta_bic = saw_bic - sine_bic
             print(f"Sinusoid model preferred with ΔBIC = {delta_bic:.2f}")
         else:
@@ -71,6 +83,7 @@ class Finder(Sawtooth_Period_Finder):
             best_params = saw_params
             best_uncertainties = saw_uncertainties
             best_chisqu = saw_chisqu
+            red_chisqu = saw_red_chisqu
             delta_bic = sine_bic - saw_bic
             print(f"Sawtooth model preferred with ΔBIC = {delta_bic:.2f}")
 
@@ -82,10 +95,12 @@ class Finder(Sawtooth_Period_Finder):
         print(f"\nSINUSOID MODEL:")
         print(f"  χ² = {sine_chisqu:.2f}")
         print(f"  BIC = {sine_bic:.2f}")
+        print(f"  Reduced χ² = {sine_red_chisqu:.3f}")
         print(f"  Period = {sine_period:.4f} days")
         print(f"\nSAWTOOTH MODEL:")
         print(f"  χ² = {saw_chisqu:.2f}")
         print(f"  BIC = {saw_bic:.2f}")
+        print(f"  Reduced χ² = {saw_red_chisqu:.3f}")
         print(f"  Period = {saw_period:.4f} days")
         print(f"\n{'='*60}")
         print(f"BEST: {best_model.upper()} (ΔBIC = {delta_bic:.2f})")
@@ -244,10 +259,10 @@ class Finder(Sawtooth_Period_Finder):
 
 if __name__ == "__main__":
     finder = Finder(
-        name="V636 Cas",
+        name="MW Cyg",
         time=time_list,
-        magnitude=df["m_standard"].values,
-        magnitude_error=df["m_standard_err"].values,
+        magnitude=df["m_differential"].values,
+        magnitude_error=df["m_differential_err"].values,
     )
 
     finder.run_period_analysis()

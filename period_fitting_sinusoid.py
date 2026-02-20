@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from general_functions import Astro_Functions
 import corner
 
-output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/AliceInChains"
+output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/TestChains"
 
 class Sinusoid_Period_Finder:
     
@@ -64,8 +64,8 @@ class Sinusoid_Period_Finder:
         Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
         other free parameters. Returns best-fit parameters, stores periods and corresponding chi square values.
         """
-        p_min = 7 # days, Breger (1980)
-        p_max = 10 # days, Soszyński et al. (2024)
+        p_min = 1.49107 # days, Breger (1980)
+        p_max = 78.14 # days, Soszyński et al. (2024)
         self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
         self.chisqu_vals = []
@@ -220,7 +220,7 @@ class Sinusoid_Period_Finder:
         """
         Generate flat, physically-bounded priors in parameter space.
         """
-        a_min, a_max = -2 * abs(self.a0), 2 * abs(self.a0) # range is currently quite large
+        a_min, a_max = 0, 2 * abs(self.a0) # range is currently quite large
         p_min, p_max = -1 * np.pi, np.pi # explores all of phase space
         m_min, m_max = self.m0 - 2*abs(self.m0), self.m0 + 2*abs(self.m0) # also quite large
         period_min, period_max = 0.9 * self.period0,  1.1 * self.period0 # period cannot be negative
@@ -370,7 +370,6 @@ class Sinusoid_Period_Finder:
             self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
             quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
             title_fmt=".3f",
-            range=[0.99] * self.flat_samples.shape[1]
             ) 
         plt.show()
 

@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from period_fitting_sinusoid import Sinusoid_Period_Finder
 import corner
 
-output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/AliceInChains"
+output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/TestChains"
 
 class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
 
@@ -39,8 +39,8 @@ class Sawtooth_Period_Finder(Sinusoid_Period_Finder):
         Iterates over the literature range of classical cepheid periods, fixing periods whilst fitting
         other free parameters. Returns chisqu plot for period range and best-fit parameters.
         """
-        p_min = 7 # days, Breger (1980)
-        p_max = 10 # days, Soszyński et al. (2024)
+        p_min = 1.49107 # days, Breger (1980)
+        p_max = 78.14 # days, Soszyński et al. (2024)
         self.period_range = np.linspace(p_min, p_max, 1000) # approximate period value lies in this range
 
         param_vals = []
