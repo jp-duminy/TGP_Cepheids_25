@@ -46,6 +46,7 @@ base_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheid
 
 # because standards were somewhat inconveniently named
 ALL_STANDARD_IDS = {"114176", "SA111775", "F_108", "SA112_595", "GD_246", "G93_48", "G156_31"}
+REFERENCE_NIGHT = "2025-10-06"
 
 #
 # helper functions
@@ -486,7 +487,8 @@ class DifferentialCorrections:
     """
     Differential photometry: analysing reference stars for each cepheid in order to correct for night-by-night variations.
     """
-    def __init__(self, cepheid_id, fits_path, reference_catalogue, calibration, reference_flipstat):
+    def __init__(self, cepheid_id, fits_path, reference_catalogue, calibration, reference_flipstat,
+                 cepheid_xy_ref, cepheid_xy_true):
         self.cepheid_id = cepheid_id
         self.fits_path = fits_path
         self.refs = reference_catalogue.get(cepheid_id, {})
@@ -494,6 +496,17 @@ class DifferentialCorrections:
 
         self.reference_flipstat = reference_flipstat
         self.flipped = self.check_flip()
+
+        self.img_size = 3995 # image ranges from -0.5 to 3996.5
+
+        x_ref, y_ref = cepheid_xy_ref
+        x_now, y_now = cepheid_xy_true
+        if self.flipped:
+            self.dx = x_now - (self.img_size - x_ref)
+            self.dy = y_now - (self.img_size - y_ref)
+        else:
+            self.dx = x_now - x_ref
+            self.dy = y_now - y_ref
 
     @staticmethod
     def flip_coords(x, y):
@@ -511,8 +524,14 @@ class DifferentialCorrections:
         y = float(ref_data["y-coord"])
         if self.flipped:
             print(f"Original coords are x: {x}, y: {y}")
-            x, y = self.flip_coords(x, y)
+            x = (self.img_size - x) + self.dx
+            y = (self.img_size - y) + self.dy
             print(f"Flipped coords are x: {x}, y: {y}")
+        else:
+            print(f"Original coords are x: {x}, y: {y}")
+            x = x + self.dx
+            y = y + self.dy
+            print(f"Translated coords are x: {x}, y: {y}")
         return x, y
     
     def check_flip(self):
@@ -744,6 +763,9 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     if diagnostic_plot and len(cep_files) > 0:
         plot_full_sky_subtracted(cep_files[0], "MW Cyg", night)
 
+    # get reference star coordinates
+    cep_cat_ref, _= get_catalogues_for_night(REFERENCE_NIGHT)
+
     for cep_file in cep_files:
         cep_id = data_manager.extract_cepheid_id(cep_file.name)
         if cep_id is None or cep_id not in cep_cat:
@@ -770,7 +792,13 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
 
         m_calibrated = m_inst + Z1 + k * (airmass - 1)
 
-        diff = DifferentialCorrections(cep_id, cep_file, reference_catalogue, calibration, cepheid_orientation_catalogue[cep_id])
+
+        x_ref = float(cep_cat_ref[cep_id]["x-coord"])
+        y_ref = float(cep_cat_ref[cep_id]["y-coord"])
+
+        diff = DifferentialCorrections(cep_id, cep_file, reference_catalogue, calibration, cepheid_orientation_catalogue[cep_id],
+                                        cepheid_xy_ref=(x_ref, y_ref),
+                                        cepheid_xy_true=(x_g, y_g))
         m_corrected, m_corrected_err = diff.apply(m_calibrated, m_inst_err, plot=diagnostic_plot)
         diff.debug_flip(plot=True)
 
