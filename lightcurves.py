@@ -100,6 +100,24 @@ class Lightcurves:
         ax.set_title(f"Reference Star Magnitudes — {self.name}")
         plt.show()
 
+    def compare_light_curves(self):
+        """
+        Overplot standard and differential magnitudes to compare scatter.
+        """
+        fig, ax = plt.subplots()
+
+        ax.errorbar(self.cep_mjd_time, self.m_stand, yerr=self.m_stand_err, fmt='o',
+                    label='Standard', color='black', capsize=5)
+        ax.errorbar(self.cep_mjd_time, self.m_diff, yerr=self.m_diff_err, fmt='s',
+                    label='Differential', color='red', capsize=5)
+
+        ax.set_xlabel('Time [MJD]')
+        ax.set_ylabel('Magnitude [mag]')
+        ax.set_title(f"Standard vs Differential — {self.name}")
+        ax.legend()
+        ax.invert_yaxis()
+        plt.show()
+
 def main():
 
     lc = Lightcurves(
@@ -116,7 +134,7 @@ def main():
     lc.standard_mag_light_curve()
     lc.differential_mag_light_curve()
     lc.plot_reference_stability()
-
+    lc.compare_light_curves()
 
 if __name__ == "__main__":
     main()
