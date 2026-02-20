@@ -522,15 +522,15 @@ class DifferentialCorrections:
         x = float(ref_data["x-coord"])
         y = float(ref_data["y-coord"])
         if self.flipped:
-            print(f"Original coords are x: {x}, y: {y}")
+            print(f"Original coords are x: {x:.3f}, y: {y:.3f}")
             x = (self.img_size - x) + self.dx
             y = (self.img_size - y) + self.dy
-            print(f"Flipped coords are x: {x}, y: {y}")
+            print(f"Flipped coords are x: {x:.3f}, y: {y:.3f}")
         else:
-            print(f"Original coords are x: {x}, y: {y}")
+            print(f"Original coords are x: {x:.3f}, y: {y:.3f}")
             x = x + self.dx
             y = y + self.dy
-            print(f"Translated coords are x: {x}, y: {y}")
+            print(f"Translated coords are x: {x:.3f}, y: {y:.3f}")
         return x, y
     
     def check_flip(self):
@@ -557,22 +557,20 @@ class DifferentialCorrections:
         Plot reference star expected positions on the image.
         """
         ap = AperturePhotometry(str(self.fits_path))
-        fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+        fig, ax = plt.subplots(figsize=(8, 8))
+        night = Path(self.fits_path).parent.name
+        ax.imshow(ap.data, origin='lower',
+                norm=LogNorm(vmin=np.median(ap.data),
+                            vmax=np.percentile(ap.data, 99)),
+                cmap='gray')
+        for ref_id, ref_data in self.refs.items():
+            x, y = self.get_reference_star_coords(ref_data)
+            ax.plot(x, y, 'bx', markersize=7, markeredgewidth=1.5)
+            ax.annotate(ref_id, (x, y), color='blue', fontsize=8,
+            xytext=(7,7), textcoords='offset points')
+            ax.set_title(f"Cepheid {self.cepheid_id} Reference Stars - {night} (flipped={self.flipped})")
         
-        for ax, do_flip, label in zip(axes, [False, True], ['Original', 'Flipped']):
-            ax.imshow(ap.data, origin='lower',
-                    norm=LogNorm(vmin=np.median(ap.data),
-                                vmax=np.percentile(ap.data, 99)),
-                    cmap='gray')
-            for ref_id, ref_data in self.refs.items():
-                x, y = float(ref_data["x-coord"]), float(ref_data["y-coord"])
-                if do_flip:
-                    x, y = self.flip_coords(x, y)
-                ax.plot(x, y, 'rx', markersize=12, markeredgewidth=2)
-                ax.annotate(ref_id, (x, y), color='red', fontsize=8)
-            ax.set_title(f'{label} — FLIPSTAT={self.flipped}')
-        
-        plt.suptitle(self.fits_path.name)
+
         plt.show()
     
     def count_matches(self, use_flip):
@@ -840,4 +838,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Reference results saved to {ref_filename}")
 
 if __name__ == "__main__":
-    main("2025-09-22", diagnostic_plot=True)  # put in night syntax as needed
+    main("2025-10-23", diagnostic_plot=False)  # put in night syntax as needed
