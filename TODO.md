@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Todo for Reduction
 
 Sort out fits file headers
@@ -39,3 +40,23 @@ Cepheid 5 (flipping issues)
 
 
 
+=======
+## Update 27/01
+
+### Small Tasks:
+
+- ~~run_period_fit must be updated to compare the two models and pick the best one (implement Bayesian Information Criterion)~~ 30/01
+- ~~Store chain~~ 31/01
+- Need to write functions to parse data from photometry
+- ~~Update plots to incorporate errors (can extract from chains!)~~ 31/01
+- Start thinking about applying the data analysis to Andromeda CV1
+
+### Big Ones:
+
+- ~~BIC is useful but also compare to literature & eyeball the fit; allow flexibility (reduced chi-squares)~~ 30/01
+- ~~Once best model is picked, run emcee with desired model~~ 30/01
+- Store chains (as dictionaries) and check whether they converged
+- ~~Sample randomly from cepheid chains; period and magnitude (midline)~~ 31/01
+- ~~Marginalised likelihood model for P-L relation (use literature values)~~ 31/01
+- ~~Run emcee on P-L in a similar way to cepheid~~ 31/01
+>>>>>>> Period-Fitting-Beta
