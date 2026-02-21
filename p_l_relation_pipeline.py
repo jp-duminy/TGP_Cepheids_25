@@ -358,8 +358,8 @@ class PLRelation:
         ax_res.set_xlabel(r'$\log_{10}$(Period) [days]')
         ax_res.set_ylabel('Residuals [mag]')
         ax_res.grid(True, alpha=0.3)
+        plt.show()
 
-    plt.show()
     def print_results(self):
         """
         Print fitted P-L relation parameters.
@@ -381,7 +381,7 @@ class PLRelation:
 if __name__ == "__main__":
 
     chain_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/AliceInChains"
-    per_cepheid_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/RawData"
+    per_cepheid_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/CalibratedData"
 
     cepheid_ids = sorted(cepheid_vizier_distances.keys())
 
@@ -399,8 +399,8 @@ if __name__ == "__main__":
         finder = Finder(
             name=df["Name"].iloc[0],
             time=df["ISOT"].dropna().astype(str).str.strip().tolist(),
-            magnitude=df["m_standard"].values,
-            magnitude_error=df["m_standard_err"].values,
+            magnitude=df["m_differential"].values,
+            magnitude_error=df["m_differential_err"].values,
         )
 
         # try sinusoid chain first, fall back to sawtooth
