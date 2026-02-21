@@ -195,7 +195,7 @@ class SinglePhotometry:
         
         return airmass
 
-    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=6.0, plot=False):
+    def locate_star(self, x_guess, y_guess, fwhm=4.0, sigma=3.0, plot=False):
         """
         Uses DAOStarFinder with an initial guess to locate the target star in the image.
         Most stars seem to have fwhm ~ 4.0 so we'll run with that.
@@ -282,7 +282,7 @@ class SinglePhotometry:
 
         return optimal_radius
 
-    def raw_photometry(self, width, plot):
+    def raw_photometry(self, width, plot, override=False):
         """
         Raw photometry (computes instrumental magnitude and associated error.)
         """
@@ -296,9 +296,13 @@ class SinglePhotometry:
         centroid_local, fwhm = self.ap.get_centroid_and_fwhm(masked_data, self.name, plot=plot) # centroid for cutout
         centroid_global = (centroid_local[0] + x_offset, centroid_local[1] + y_offset) # centroid for full image
 
+
         # compute optimal aperture size from curve-of-growth analysis
         ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=plot)
-
+        if override:
+            ap_rad = 8
+        else:
+            ap_rad = 15
         print(f"FWHM for {self.name}: {fwhm:.3f}\n")
         print(f"Aperture size for {self.name}: {ap_rad:.3f}")
 
@@ -306,10 +310,16 @@ class SinglePhotometry:
             self.plot_psf_profile(masked_data, centroid_local, fwhm, self.name)
 
         # extract flux via full aperture photometry
-        flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
-            masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
+        if override:
+            flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
+                masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
+                inner=1.5, outer=2.0, plot=plot, savefig=False
+            )
+        else:
+            flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
+            self.ap.data, centroid_global, ap_rad, ceph_name=self.name, date=self.date,
             inner=1.5, outer=2.0, plot=plot, savefig=False
-        )
+            )
 
         # compute instrumental magnitudes and errors
         instrumental_mag = self.ap.instrumental_magnitude(flux)
