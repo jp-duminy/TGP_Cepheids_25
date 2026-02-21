@@ -9,7 +9,10 @@ from pathlib import Path
 
 from andromeda_plots import plot_distance_posterior, plot_on_pl_relation, plot_light_curve
 
+import scienceplots
 
+plt.style.use('science')
+plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation
 
 # need to decide on literature source
 
@@ -77,7 +80,7 @@ class AndromedaDistance:
         print(f"{'='*60}")
         print(f"  {median_kpc:.1f} +{upper_kpc:.1f} -{lower_kpc:.1f} kpc")
         print(f"  {median_mpc:.3f} +{upper_mpc:.3f} -{lower_mpc:.3f} Mpc")
-        print(f"  Literature: ~785kpc ")
+        print(f"  Literature: 761kPc ")
         print(f"{'='*60}\n")
 
         return self.distance_kpc
@@ -100,8 +103,8 @@ class AndromedaDistance:
         ax.axvline(lower, color='red', linestyle='--', linewidth=1)
         ax.axvline(upper, color='red', linestyle='--', linewidth=1)
 
-        ax.axvline(770, color='green', linestyle='-', linewidth=2,
-                   label='Literature: ~785 kpc')
+        ax.axvline(761, color='green', linestyle='-', linewidth=2,
+                   label='Literature: 761 kPc (Siyang et al., 2021]')
 
         ax.set_xlabel('Distance [kpc]')
         ax.set_ylabel('Probability Density')
@@ -141,7 +144,7 @@ class AndromedaDistance:
         M_err = np.std(self.M_samples)
 
         ax.errorbar(med_logp, med_M, xerr=logp_err, yerr=M_err,
-                    fmt='*', color='red', markersize=15,
+                    fmt='D', color='black', markersize=5,
                     markeredgecolor='black', markeredgewidth=0.8,
                     capsize=3, label='Andromeda CV1', zorder=5)
 
@@ -151,13 +154,14 @@ class AndromedaDistance:
         ax.legend()
         ax.grid(True, alpha=0.3)
         ax.set_title('Andromeda CV1 on the Period-Luminosity Relation')
+
         plt.show()
 
 
 if __name__ == "__main__":
     chain_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis"
 
-    cepheid_chain = f"{chain_dir}/AliceInChains/Andromeda_sinusoid_chain.npy"
+    cepheid_chain = f"{chain_dir}/AndromedaData/Andromeda CV1_sawtooth_chain.npy"
     pl_chain = f"{chain_dir}/PLRelationChain/PL_relation_chain.npy"
 
     andromeda = AndromedaDistance(cepheid_chain, pl_chain, ebv=0.06)

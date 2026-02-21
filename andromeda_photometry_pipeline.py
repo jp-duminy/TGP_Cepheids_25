@@ -22,7 +22,7 @@ plt.rcParams['text.usetex'] = False
 # DIRECTORIES
 # ========================
 stacked_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Andromeda"
-output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Andromeda/Photometry"
+output_dir = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/AndromedaData"
 
 # ========================
 # CONSTANTS
@@ -50,51 +50,6 @@ def compute_ref_offsets():
         offsets[ref_id] = (dx, dy)
 
     return offsets
-
-def faint_star_photometry(fits_path, x_guess, y_guess, name, ebv,
-                        ap_rad=8.0, width=50):
-    """
-    Photometry for faint stars with fixed aperture, no curve-of-growth.
-    """
-    phot = SinglePhotometry(
-        fits_path=str(fits_path),
-        x_rough=float(x_guess),
-        y_rough=float(y_guess),
-        name=name,
-        ebv=str(ebv),
-    )
-
-    x, y = phot.locate_star(x_guess, y_guess, fwhm=4.0, sigma=3.0, plot=False)
-
-    masked_data, x_off, y_off = phot.ap.mask_data_and_plot(
-        x, y, width=width, name=name, date="LT", plot=False
-    )
-
-    centroid, _ = phot.ap.get_centroid_and_fwhm(masked_data, name, plot=False)
-    # ignore returned FWHM, use fixed aperture
-
-    flux, ap_area, sky_bkg, ann_area = phot.ap.aperture_photometry(
-        masked_data, centroid, ap_rad,
-        ceph_name=name, date="LT",
-        inner=1.5, outer=2.0, plot=False, savefig=False
-    )
-
-    m_inst = phot.ap.instrumental_magnitude(flux)
-    m_err = phot.ap.get_inst_mag_error(
-        flux, ap_area, sky_bkg, ann_area,
-        phot.gain, phot.exp_time, phot.read_noise, phot.stack_size
-    )
-
-    return m_inst, m_err
-
-m_sky, m_sky_err = faint_star_photometry(
-    "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Andromeda/h_e_20170608_stacked.fits",
-    x_guess=766.999, y_guess=1953.36,  # adjust to empty patch
-    name="empty_sky", ebv="0.0",
-    ap_rad=10.0, width=100, plot=True
-)
-
-print(f"Sky aperture instrumental mag: {m_sky:.3f}")
 
 def get_ref_position(cv1_x, cv1_y, dx, dy, date_str):
     """Compute reference star pixel position, accounting for 90 degree anticlockwise rotation."""
@@ -138,7 +93,7 @@ def run_andromeda_photometry(plot=False):
     refs = andromeda_reference_catalogue["CV1"]
 
     results = []
-
+    all_ref_records = []
     for fits_path in stacked_files:
         print(f"\n{'='*60}")
         print(f"Processing: {fits_path.name}")
@@ -165,22 +120,15 @@ def run_andromeda_photometry(plot=False):
                 name="CV1",
                 ebv=str(EBV_CV1),
             )
-            m_cv1, m_cv1_err = cv1_phot.raw_photometry(width=150, plot=plot)
+            m_cv1, m_cv1_err = cv1_phot.raw_photometry(width=50, plot=plot, override=True)
         except Exception as e:
             print(f"  CV1 FAILED: {e}")
             continue
 
-        # --- Empirical background correction ---
-        SKY_CONTAMINATION = 124.0  # counts/s, measured from empty aperture near CV1
-        cv1_flux = 10**(-0.4 * m_cv1)
-        cv1_corrected_flux = cv1_flux - SKY_CONTAMINATION
-        if cv1_corrected_flux <= 0:
-            print(f"  SKIPPING: corrected flux negative")
-            continue
-        m_cv1 = -2.5 * np.log10(cv1_corrected_flux)
-
         # --- Reference star photometry ---
         offsets = []
+        ref_records = []
+
         for ref_id, (dx, dy) in ref_offsets.items():
             try:
                 ref_x, ref_y = get_ref_position(cv1_x, cv1_y, dx, dy, date_str)
@@ -192,10 +140,21 @@ def run_andromeda_photometry(plot=False):
                     name=ref_id,
                     ebv="0.0",
                 )
-                m_ref, m_ref_err = ref_phot.raw_photometry(width=150, plot=False)
+                m_ref, m_ref_err = ref_phot.raw_photometry(width=80, plot=False, override=False)
+                g_known = refs[ref_id]["g_true"]
                 offset = refs[ref_id]["g_true"] - m_ref
                 offsets.append(offset)
                 print(f"  {ref_id}: m_inst = {m_ref:.3f}, offset = {offset:.3f}")
+
+                ref_records.append({
+                    "cepheid_id": "CV1",
+                    "ref_id": ref_id,
+                    "ISOT": isot,
+                    "m_inst": m_ref,
+                    "m_inst_err": m_ref_err,
+                    "g_true": g_known,
+                    "offset": offset,
+                })
 
             except Exception as e:
                 print(f"  {ref_id} FAILED: {e}")
@@ -204,6 +163,8 @@ def run_andromeda_photometry(plot=False):
         if len(offsets) < 3:
             print(f"  SKIPPING: only {len(offsets)} refs succeeded (need >= 3)")
             continue
+
+        all_ref_records.extend(ref_records)
 
         # --- Calibrate via differential zero-point ---
         offsets = np.array(offsets)
@@ -224,16 +185,24 @@ def run_andromeda_photometry(plot=False):
         V_cal = g_cal - jester_offset
         V_cal_err = np.sqrt(g_cal_err**2 + jester_rms**2)
 
+        m_inst = m_cv1 - jester_offset
+        m_inst_err = np.sqrt(m_cv1_err**2 + jester_rms**2)
+
         # --- Dust correction in V-band ---
         # A_V = 3.1 * E(B-V) (standard R_V = 3.1)
         A_V = 3.1 * EBV_CV1
-        V_corrected = V_cal - A_V
+
+        # Midline Correction: empty apertures
+        BLENDING_CORRECTION = 19.4 - 16.645
+        V_corrected = V_cal - A_V + BLENDING_CORRECTION
 
         results.append({
             'MJD': mjd,
             'ISOT': isot,
             'V_mag': V_corrected,
             'V_err': V_cal_err,
+            'V_inst': m_inst,
+            'V_inst_err': m_inst_err,
             'g_calibrated': g_cal,
             'g_err': g_cal_err,
             'zp': zp,
@@ -243,20 +212,20 @@ def run_andromeda_photometry(plot=False):
         print(f"\n  >> V = {V_corrected:.3f} +/- {V_cal_err:.3f}  (g = {g_cal:.3f}, ZP = {zp:.3f}, {len(offsets)} refs)")
 
     # --- Compile results ---
+
+    out_path = Path(output_dir)
     df = pd.DataFrame(results)
     df = df.sort_values('MJD').reset_index(drop=True)
 
-    # --- Save main CSV ---
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-    csv_path = out_path / "andromeda_CV1_lightcurve.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"\nLight curve saved to: {csv_path}")
-    print(f"Total epochs: {len(df)}")
+    ref_df = pd.DataFrame(all_ref_records)
+    ref_csv_path = out_path / "Andromeda_CV1_references.csv"
+    ref_df.to_csv(ref_csv_path, index=False)
+
+
 
     # --- Save period-fit-ready CSV ---
-    period_fit_df = df[['ISOT', 'V_mag', 'V_err']].copy()
-    period_fit_df.columns = ['ISOT', 'm_differential', 'm_differential_err']
+    period_fit_df = df[['ISOT', 'V_mag', 'V_err', 'V_inst', 'V_inst_err']].copy()
+    period_fit_df.columns = ['ISOT', 'm_differential', 'm_differential_err', 'm_standard', 'm_standard_err']
     period_fit_df['Name'] = 'Andromeda_CV1'
     period_fit_path = out_path / "andromeda_CV1_period_fit.csv"
     period_fit_df.to_csv(period_fit_path, index=False)
