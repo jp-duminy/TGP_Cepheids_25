@@ -15,6 +15,8 @@ import pandas as pd
 from pathlib import Path
 from run_period_fit import Finder
 
+output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/PLRelationChain"
+
 class PLRelation:
     def __init__(self, objects, distances):
         self.objects = objects
@@ -112,7 +114,7 @@ class PLRelation:
         """
 
         ndim = 3 # number of dimensions
-        nwalkers = 32 # numbers of walkers to explore parameter space
+        nwalkers = 50 # numbers of walkers to explore parameter space
 
         pos = self.pl_walker_initialisation(nwalkers, ndim)
 
@@ -120,13 +122,13 @@ class PLRelation:
 
         # first allow walkers to explore parameter space
         print(f"Running burn-in for P-L Relation...")
-        pos = sampler.run_mcmc(pos, 500) # small burn-in of 100 steps
+        pos = sampler.run_mcmc(pos, 1000) # small burn-in of 100 steps
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
         # with walkers settled in, run the main chain
         print(f"Running production...")
-        sampler.run_mcmc(pos, 3000, progress=True) # progress=True generates a progress bar
+        sampler.run_mcmc(pos, 5000, progress=True) # progress=True generates a progress bar
 
         self.sampler = sampler # keep sampler for analysis of quality of chain
 
@@ -139,7 +141,28 @@ class PLRelation:
         self.thin = thin
         self.flat_samples = self.sampler.get_chain(thin=self.thin, flat=True)
 
-        quantiles = [2.5, 50, 97.5]  # 0.025-0.975 is ~ 2σ gaussian error
+        chain_filename = f"{output_path}/PL_relation_chain.npy"
+        np.save(chain_filename, self.flat_samples)
+        print(f"P-L chain saved to {chain_filename}")
+
+        metadata = {
+            'model': 'PL_relation',
+            'n_params': ndim,
+            'n_walkers': nwalkers,
+            'n_steps': 5000,
+            'thin': thin,
+            'autocorr_time': tau.tolist() if hasattr(tau, 'tolist') else tau,
+            'chain_shape': self.flat_samples.shape,
+            'n_cepheids': len(self.objects),
+            'cepheid_names': [obj.name for obj in self.objects],
+        }
+
+        metadata_filename = f"{output_path}/PL_relation_metadata.txt"
+        with open(metadata_filename, 'w') as f:
+            for key, value in metadata.items():
+                f.write(f"{key}: {value}\n")
+
+        quantiles = [16, 50, 84]  # 0.025-0.975 is ~ 2σ gaussian error
         lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
 
         # the median (0.5) summarises the central tendency of the posterior distribution
@@ -178,7 +201,7 @@ class PLRelation:
         labels = ["a (Gradient)", "b (Intercept)", "Scatter [mag]"]
         fig = corner.corner(
             self.flat_samples, labels=labels, show_titles=True, # displays uncertainties
-            quantiles = [0.025, 0.5, 0.975], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
+            quantiles = [0.16, 0.50, 0.84], # 0.025-0.975 ~ 2σ gaussian error, 0.5 is the median
             title_fmt=".3f"
             ) 
         plt.show()
@@ -211,10 +234,9 @@ class PLRelation:
         ax.set_title('Emcee Period-Luminosity Relation Fit')
         plt.show()
     """
+    """
     def pl_plot_emcee_fit(self):
-        """
-        Plot the P-L relation with each Cepheid in a different colour and uncertainty bands.
-        """
+
         fig, ax = plt.subplots()
 
         colors = plt.cm.tab20(np.linspace(0, 1, len(self.objects)))
@@ -256,7 +278,88 @@ class PLRelation:
         ax.grid(True, alpha=0.3)
         ax.set_title('Period-Luminosity Relation')
         plt.show()
+    """
+    def pl_plot_emcee_fit(self):
+        """
+        Plot the P-L relation with residuals, colour-coded by log period.
+        """
+        fig, (ax, ax_res) = plt.subplots(2, 1, figsize=(8, 6),
+                                        gridspec_kw={'height_ratios': [3, 1]},
+                                        sharex=True)
+        fig.subplots_adjust(hspace=0.05)
 
+        # colour mapping by log period
+        median_periods = [np.median(p) for p in self.period_posteriors]
+        log_median_periods = np.log10(median_periods)
+        norm = plt.Normalize(vmin=min(log_median_periods), vmax=max(log_median_periods))
+        cmap = plt.cm.viridis
+        colors = [cmap(norm(lp)) for lp in log_median_periods]
+
+        # --- top panel: P-L relation ---
+        for i in range(len(self.objects)):
+            ax.scatter(np.log10(self.period_posteriors[i]), self.magnitude_posteriors[i],
+                    alpha=0.1, s=5, color=colors[i])
+
+            med_p = median_periods[i]
+            med_m = np.median(self.magnitude_posteriors[i])
+            ax.errorbar(np.log10(med_p), med_m, fmt='o', color=colors[i],
+                        markersize=8, markeredgecolor='black', markeredgewidth=0.5)
+
+        # fit line with uncertainty band
+        period_range = np.linspace(min(median_periods) * 0.9, max(median_periods) * 1.1, 100)
+        log_p = np.log10(period_range)
+
+        draw = np.random.randint(0, len(self.flat_samples), size=200)
+        models = np.array([self.pl_model(period_range, self.flat_samples[d, 0],
+                                        self.flat_samples[d, 1]) for d in draw])
+
+        med_model = np.median(models, axis=0)
+        spread = np.std(models, axis=0)
+
+        ax.plot(log_p, med_model, 'r-', linewidth=2,
+                label=f'M = {self.a0:.2f}(log P - 1) {"+" if self.b0 >= 0 else "−"} {abs(self.b0):.2f}') # (b is negative)
+        ax.fill_between(log_p, med_model - spread, med_model + spread,
+                        color='gray', alpha=0.4, label=r'$1\sigma$')
+        ax.fill_between(log_p, med_model - 2 * spread, med_model + 2 * spread,
+                        color='gray', alpha=0.2, label=r'$2\sigma$')
+
+        ax.set_ylabel('Absolute Magnitude')
+        ax.legend(fontsize=7)
+        ax.invert_yaxis()
+        ax.grid(True, alpha=0.3)
+        ax.set_title('Period-Luminosity Relation')
+        ax.tick_params(labelbottom=False)
+
+        # colourbar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax, pad=0.02)
+        cbar.set_label(r'$\log_{10}$(Period) [days]', fontsize=9)
+
+        # --- bottom panel: residuals ---
+        for i in range(len(self.objects)):
+            med_p = median_periods[i]
+            med_m = np.median(self.magnitude_posteriors[i])
+            mag_err = np.std(self.magnitude_posteriors[i])
+
+            expected = self.pl_model(med_p, self.a0, self.b0)
+            residual = med_m - expected
+
+            ax_res.errorbar(np.log10(med_p), residual, yerr=mag_err,
+                            fmt='o', color=colors[i], capsize=3,
+                            markeredgecolor='black', markeredgewidth=0.5)
+
+            # annotate outliers
+            if abs(residual) > 2 * self.sigma:
+                ax_res.annotate(self.names[i], (np.log10(med_p), residual),
+                                fontsize=7, xytext=(5, 5), textcoords='offset points')
+
+        ax_res.axhline(0, color='red', linestyle='--', linewidth=1)
+        ax_res.set_xlabel(r'$\log_{10}$(Period) [days]')
+        ax_res.set_ylabel('Residuals [mag]')
+        ax_res.grid(True, alpha=0.3)
+
+    plt.show()
     def print_results(self):
         """
         Print fitted P-L relation parameters.
