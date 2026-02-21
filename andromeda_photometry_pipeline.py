@@ -51,6 +51,50 @@ def compute_ref_offsets():
 
     return offsets
 
+def faint_star_photometry(fits_path, x_guess, y_guess, name, ebv,
+                        ap_rad=8.0, width=50):
+    """
+    Photometry for faint stars with fixed aperture, no curve-of-growth.
+    """
+    phot = SinglePhotometry(
+        fits_path=str(fits_path),
+        x_rough=float(x_guess),
+        y_rough=float(y_guess),
+        name=name,
+        ebv=str(ebv),
+    )
+
+    x, y = phot.locate_star(x_guess, y_guess, fwhm=4.0, sigma=3.0, plot=False)
+
+    masked_data, x_off, y_off = phot.ap.mask_data_and_plot(
+        x, y, width=width, name=name, date="LT", plot=False
+    )
+
+    centroid, _ = phot.ap.get_centroid_and_fwhm(masked_data, name, plot=False)
+    # ignore returned FWHM, use fixed aperture
+
+    flux, ap_area, sky_bkg, ann_area = phot.ap.aperture_photometry(
+        masked_data, centroid, ap_rad,
+        ceph_name=name, date="LT",
+        inner=1.5, outer=2.0, plot=False, savefig=False
+    )
+
+    m_inst = phot.ap.instrumental_magnitude(flux)
+    m_err = phot.ap.get_inst_mag_error(
+        flux, ap_area, sky_bkg, ann_area,
+        phot.gain, phot.exp_time, phot.read_noise, phot.stack_size
+    )
+
+    return m_inst, m_err
+
+m_sky, m_sky_err = faint_star_photometry(
+    "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Andromeda/h_e_20170608_102_1_1_1.fits",
+    x_guess=1179.55, y_guess=1166.59,  # adjust to empty patch
+    name="empty_sky", ebv="0.0",
+    ap_rad=10.0, width=100, plot=True
+)
+
+print(f"Sky aperture instrumental mag: {m_sky:.3f}")
 
 def get_ref_position(cv1_x, cv1_y, dx, dy, date_str):
     """Compute reference star pixel position, accounting for 90 degree anticlockwise rotation."""
