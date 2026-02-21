@@ -40,8 +40,8 @@ output_dict = {}
 
 for key, star in ref_stars.items():
     # Pixel to sky
-    ra, dec = wcs.all_pix2world(star["x-coord"], star["y-coord"], 0)
-    coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+    ra_deg, dec_deg = wcs.all_pix2world(star["x-coord"], star["y-coord"], 0)
+    coord = SkyCoord(ra=ra_deg*u.deg, dec=dec_deg*u.deg)
     
     # Query Pan-STARRS for g-band
     try:
@@ -57,6 +57,8 @@ for key, star in ref_stars.items():
     output_dict[key] = {
         "x-coord": star["x-coord"],
         "y-coord": star["y-coord"],
+        "ra": ra_deg,
+        "dec": dec_deg,
         "G_true": g_mag
     }
 
