@@ -1,7 +1,17 @@
+"""
+author: @jp
+
+Queries a suitable package to find the G-magnitudes of Andromeda reference stars.
+
+Prints it in dictionary format to put into andromeda_catalogue.py
+
+"""
+
 import json
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
+import astroquery
 from astroquery.vizier import Vizier
 import astropy.units as u
 
@@ -9,11 +19,11 @@ import astropy.units as u
 fits_file = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Andromeda/h_e_20170608_stacked.fits"
 # pixel coordinates of 5 chosen reference stars
 ref_stars = {
-    "ref1": {"x-coord": "1263.3168", "y-coord": "706.224"}, 
-    "ref2": {"x-coord": "421.70867", "y-coord": "1355.8273"},
-    "ref3": {"x-coord": "1593.3986", "y-coord": "1492.3688"},
-    "ref4": {"x-coord": "192.33158", "y-coord": "236.39108"},
-    "ref5": {"x-coord": "1027.8659", "y-coord": "1575.0207"}
+    "ref1": {"x-coord": 1263.3168, "y-coord": 706.224}, 
+    "ref2": {"x-coord": 421.70867, "y-coord": 1355.8273},
+    "ref3": {"x-coord": 1593.3986, "y-coord": 1492.3688},
+    "ref4": {"x-coord": 323.06557, "y-coord": 614.27889},
+    "ref5": {"x-coord": 1027.8659, "y-coord": 1575.0207}
 }
 
 # ----------------------
@@ -30,7 +40,7 @@ output_dict = {}
 
 for key, star in ref_stars.items():
     # Pixel to sky
-    ra, dec = wcs.all_pix2world(star["x"], star["y"], 0)
+    ra, dec = wcs.all_pix2world(star["x-coord"], star["y-coord"], 0)
     coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
     
     # Query Pan-STARRS for g-band
@@ -45,8 +55,8 @@ for key, star in ref_stars.items():
         g_mag = "NaN"
     
     output_dict[key] = {
-        "x-coord": star["x"],
-        "y-coord": star["y"],
+        "x-coord": star["x-coord"],
+        "y-coord": star["y-coord"],
         "G_true": g_mag
     }
 
