@@ -1,3 +1,15 @@
+"""
+authors: @david, @jp, @harsha
+
+TGP Cepheids 25-26
+
+This is an agglomeration of photometry functions, mainly aperture photometry and extinction/dust correction.
+
+It is slightly disorganised because we had to swap from WCS to DAOStarFinder. There are some defunct functions which
+were kept for completeness and because others may find them useful.
+"""
+
+# default packages
 import numpy as np
 from photutils.aperture import CircularAperture as circ_ap, CircularAnnulus as circ_ann, \
     aperture_photometry as ap, RectangularAperture as rect_ap
@@ -10,9 +22,8 @@ from matplotlib.colors import LogNorm
 import csv
 import statsmodels.api as sm
 from matplotlib.lines import Line2D
-import AirmassInfo
+import photometry.AirmassInfo as AirmassInfo
 from astropy.stats import sigma_clipped_stats
-
 from astropy.visualization import PowerStretch, ImageNormalize, ZScaleInterval
 
 class AperturePhotometry: 

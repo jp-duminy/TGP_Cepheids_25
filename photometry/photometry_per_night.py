@@ -1,6 +1,13 @@
 """
-Working photometry pipeline for TGP Cepheids 25-26.
 author: @jp
+
+TGP Cepheids 25-26
+
+This is the full per-night photometry pipeline.
+
+It is quite comprehensive but an external eye may find the dependencies on photometry_functions confusing. This
+was run for all cepheids. For M31 CV1 I had to tinker with some of the functions because the LT Data was slightly
+different and the cepheid was much fainter (just change DAOStarFinder & centroid tolerances, reduce cutout size)
 """
 
 # default packages
@@ -17,15 +24,13 @@ import warnings
 import json
 
 # our classes
-from Cepheid_apertures import AperturePhotometry
-from Cepheid_apertures import Airmass
-from Cepheid_apertures import DustExtinction
-from AirmassInfo import AirmassInfo
+from .photometry_functions import AperturePhotometry, Airmass, DustExtinction
+from .AirmassInfo import AirmassInfo
 
 # catalogues
-from catalogues import ALL_CATALOGUES, get_catalogues_for_night, get_pixel_guess
-from reference_star_catalogues import reference_catalogue
-from orientation_catalogue import cepheid_orientation_catalogue
+from utils.catalogues import ALL_CATALOGUES, get_catalogues_for_night, get_pixel_guess
+from utils.reference_star_catalogues import reference_catalogue
+from utils.orientation_catalogue import cepheid_orientation_catalogue
 
 # updated DAOStarFinder
 from photutils.detection import DAOStarFinder
@@ -282,7 +287,7 @@ class SinglePhotometry:
 
         return optimal_radius
 
-    def raw_photometry(self, width, plot, override=False):
+    def raw_photometry(self, width, plot):
         """
         Raw photometry (computes instrumental magnitude and associated error.)
         """
@@ -299,10 +304,7 @@ class SinglePhotometry:
 
         # compute optimal aperture size from curve-of-growth analysis
         ap_rad = self.curve_of_growth(masked_data, centroid_local, fwhm, inner=1.5, outer=2.0, plot=plot)
-        if override:
-            ap_rad = 8
-        else:
-            ap_rad = 15
+
         print(f"FWHM for {self.name}: {fwhm:.3f}\n")
         print(f"Aperture size for {self.name}: {ap_rad:.3f}")
 
@@ -310,16 +312,10 @@ class SinglePhotometry:
             self.plot_psf_profile(masked_data, centroid_local, fwhm, self.name)
 
         # extract flux via full aperture photometry
-        if override:
-            flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
-                masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
-                inner=1.5, outer=2.0, plot=plot, savefig=False
-            )
-        else:
-            flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
-            self.ap.data, centroid_global, ap_rad, ceph_name=self.name, date=self.date,
-            inner=1.5, outer=2.0, plot=plot, savefig=False
-            )
+        flux, ap_area, sky_bckgnd, annulus_area = self.ap.aperture_photometry(
+        masked_data, centroid_local, ap_rad, ceph_name=self.name, date=self.date,
+        inner=1.5, outer=2.0, plot=plot, savefig=False
+        )
 
         # compute instrumental magnitudes and errors
         instrumental_mag = self.ap.instrumental_magnitude(flux)
@@ -848,4 +844,4 @@ def main(night, diagnostic_plot=False, refit_calibration=False):
     print(f"Reference results saved to {ref_filename}")
 
 if __name__ == "__main__":
-    main("2025-10-23", diagnostic_plot=False)  # put in night syntax as needed
+    main("2025-10-06", diagnostic_plot=False)  # put in night syntax as needed

@@ -1,12 +1,16 @@
 """
 author: @jp
 
-Queries a suitable package to find the G-magnitudes of Andromeda reference stars.
+TGP Cepheids 25-26
+
+Queries a suitable package to find the SDSS g-magnitudes of Andromeda reference stars.
+
+Suitable for LT data.
 
 Prints it in dictionary format to put into andromeda_catalogue.py
-
 """
 
+# default packages
 import json
 from astropy.io import fits
 from astropy.wcs import WCS

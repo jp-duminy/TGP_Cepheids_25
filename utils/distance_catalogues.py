@@ -1,8 +1,15 @@
 """
+author: @jp
 
 Cepheid distance values with corresponding primary sources.
 
 It is most sensible to use parallax measurements as then we are calibrating the distance ladder, like Henrietta Swan Leavitt.
+
+Original: provided by supervisor (Kenneth)
+SIMBAD: Gaia DR3 parallax measurements
+Vizier: Biller-Jones et al. in 2021 corrected Gaia DR3 parallax measurements using MCMC fitting. They published their results
+which quote the median of the photogeometric distance posterior. It is a rigorous parallax measurement, better than the Gaia DR3
+data, so use this for the cepheids.
 
 """
 

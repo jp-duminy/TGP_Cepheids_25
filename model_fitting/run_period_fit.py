@@ -1,37 +1,36 @@
+"""
+@author: jp
+
+TGP Cepheids 25-26
+
+Runs the full period fitting algorithm to a cepheid of choice (sinusoid/sawtooth with chisquares + emcee).
+
+"""
+
+
+# default packages
 import pandas as pd
-from period_fitting_sinusoid import Sinusoid_Period_Finder
-from period_fitting_sawtooth import Sawtooth_Period_Finder
 from matplotlib import pyplot as plt
 import numpy as np
 import scienceplots
 
+# our packages
+from model_fitting.period_fitting_sinusoid import Sinusoid_Period_Finder
+from model_fitting.period_fitting_sawtooth import Sawtooth_Period_Finder
+
 plt.style.use('science')
 plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation
-
-# test data files
-
-#filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Cepheids Data 3.csv"
-#filename = r"C:\Users\jp\OneDrive\Documents\1 Edinburgh University\Year 4\Telescope Group Project\Sawtooth Data.csv"
-
 
 filename = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/CalibratedData/cepheid_05_CP_Cep.csv"
 
 df = pd.read_csv(filename)
 
-time_list = df["ISOT"].dropna().astype(str).str.strip().tolist()
+time_list = df["ISOT"].dropna().astype(str).str.strip().tolist() # cursed syntax but it works
 
 class Finder(Sawtooth_Period_Finder):
 
     def __init__(self, name, time, magnitude, magnitude_error):
         super().__init__(name, time, magnitude, magnitude_error)
-        # Finder class already inherits Sinusoid_Period_Finder and Sawtooth_Period_Finder 
-        # so no need to redefine them here
-        #self.finder = Sinusoid_Period_Finder(
-            #name="Test",
-            #time=time_list,
-            #magnitude=df["Magnitude"].values,
-            #magnitude_error=df["Magnitude Error"].values,
-        #)
 
     def bayesian_information_criterion(self, chisqu, n_params):
         """
@@ -39,6 +38,8 @@ class Finder(Sawtooth_Period_Finder):
         k = number of parameters; n = number of datapoints; L = maximised value of likelihood function
         Since ln(L) = -0.5*chisqu, -2ln(L) = chisqu
         So BIC = chisqu + kln(n)
+
+        Did not end up using this since both models had 4 parameters.
         """
         n = len(self.magnitude) # number of datapoints
 
@@ -54,6 +55,11 @@ class Finder(Sawtooth_Period_Finder):
         return chisqu / dof
     
     def compare_period_fit(self):
+        """
+        Fits both models and lets the user pick based on pure stats but also visual inspection.
+
+        Very useful for diagnostics.
+        """
         #sine_period, sine_params, sine_uncertainties, sine_chisqu = self.finder.fit_sinusoid()
 
         # Fit both models 
@@ -246,18 +252,14 @@ class Finder(Sawtooth_Period_Finder):
                 f"Alternative best period: {period0}"
             )
         
-        # Step 3: Generate plots
+        # plots
         
         if best_model == "sinusoid":
-            # Chi-square fitting plots
-            # MCMC plots
+            # you can add plots here if you need
             self.sine_parameter_time_series()
             self.sine_plot_corner()
             self.sine_plot_emcee_fit()
         else:  # sawtooth
-            # Chi-square fitting plots
-            #self.saw_chisqu_contour_plot()
-            # MCMC plots
             self.saw_parameter_time_series()
             self.saw_plot_corner()
             self.saw_plot_emcee_fit()

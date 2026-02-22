@@ -1,7 +1,13 @@
 """
-Full differential photometry pipeline for Andromeda CV1 across all LT stacked images.
-Uses pixel guesses + DAOStarFinder, calibrates against Pan-STARRS g-band, converts to Johnson V.
 @author: jp
+
+Full differential photometry pipeline for Andromeda CV1 across all LT stacked images.
+
+Very similar to photometry_per_night, but Andromeda data is one cepheid across all nights in a folder. This meant I had
+to adapt the syntax accordingly to do per-cepheid rather than per-night (no data_manager.py)
+
+Calibrates against Pan-STARRS g-band, converts to Johnson V.
+
 """
 
 import numpy as np
@@ -10,9 +16,9 @@ from pathlib import Path
 from astropy.io import fits
 from matplotlib import pyplot as plt
 
-from Cepheid_apertures import AperturePhotometry
-from photometry_per_night import SinglePhotometry
-from andromeda_catalogue import andromeda_reference_catalogue, cv1_pixel_guesses
+from .photometry_functions import AperturePhotometry
+from .photometry_per_night import SinglePhotometry
+from utils.andromeda_catalogue import andromeda_reference_catalogue, cv1_pixel_guesses
 
 import scienceplots
 plt.style.use('science')
@@ -52,33 +58,24 @@ def compute_ref_offsets():
     return offsets
 
 def get_ref_position(cv1_x, cv1_y, dx, dy, date_str):
-    """Compute reference star pixel position, accounting for 90 degree anticlockwise rotation."""
+    """
+    Compute reference star pixel position, accounting for 90 degree anticlockwise rotation.
+    """
     if date_str in rotated_nights:
         return cv1_x + (-dy), cv1_y + dx
     return cv1_x + dx, cv1_y + dy
 
 
 def extract_date(filename):
-    """Extract YYYYMMDD date string from LT filename like h_e_20170608_stacked.fits."""
+    """
+    Extract YYYYMMDD date string from LT filename like h_e_20170608_stacked.fits.
+    """
     return filename.split("_")[2]
 
 
 def run_andromeda_photometry(plot=False):
     """
     Perform differential aperture photometry on CV1 across all LT stacked images.
-
-    For each stacked image:
-        1. Look up CV1 pixel guess for that night
-        2. Compute reference star positions from offsets (with rotation correction)
-        3. DAOStarFinder + aperture photometry on CV1 and reference stars
-        4. Differential zero-point calibration against Pan-STARRS g
-        5. Jester et al. (2005) g -> V transformation
-        6. Dust correction in V-band
-
-    Returns
-    -------
-    df : pd.DataFrame
-        Columns: MJD, ISOT, V_mag, V_err, g_calibrated, g_err, zp, n_refs
     """
     stacked_path = Path(stacked_dir)
     stacked_files = sorted(stacked_path.glob("h_e_*_stacked.fits"))
@@ -211,8 +208,7 @@ def run_andromeda_photometry(plot=False):
 
         print(f"\n  >> V = {V_corrected:.3f} +/- {V_cal_err:.3f}  (g = {g_cal:.3f}, ZP = {zp:.3f}, {len(offsets)} refs)")
 
-    # --- Compile results ---
-
+    # results collection
     out_path = Path(output_dir)
     df = pd.DataFrame(results)
     df = df.sort_values('MJD').reset_index(drop=True)
@@ -221,9 +217,7 @@ def run_andromeda_photometry(plot=False):
     ref_csv_path = out_path / "Andromeda_CV1_references.csv"
     ref_df.to_csv(ref_csv_path, index=False)
 
-
-
-    # --- Save period-fit-ready CSV ---
+    # make a .csv that is ready for straight period fitting (change column names to match)
     period_fit_df = df[['ISOT', 'V_mag', 'V_err', 'V_inst', 'V_inst_err']].copy()
     period_fit_df.columns = ['ISOT', 'm_differential', 'm_differential_err', 'm_standard', 'm_standard_err']
     period_fit_df['Name'] = 'Andromeda_CV1'

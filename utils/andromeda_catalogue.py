@@ -1,3 +1,13 @@
+"""
+author: @jp
+
+TGP Cepheids 25-26
+
+This contains pixel guesses for M31 CV1 across all its useful LT images, along with 4 bright reference stars.
+Use astroquerier.py in utils to find g-band SDSS magnitudes (what LT is taken in).
+"""
+
+# original ref4 deleted because it messed up all data 
 andromeda_reference_catalogue = {
         "CV1": {
     "ref1": {

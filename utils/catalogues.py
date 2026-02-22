@@ -1,4 +1,13 @@
-#Night 2025-09-22
+"""
+authors: @mimi, @amy, @harsha, @david
+
+TGP Cepheids 25-26
+
+Yes, you are reading this correctly. We had to manually mark pixel guesses for the cepheids and
+standards across all observing nights. This took a day of work.
+
+"""
+# Night 2025-09-22
 from matplotlib.dates import TU
 
 def get_pixel_guess(catalogue, star_id):
@@ -973,17 +982,9 @@ andromeda_catalogue = {
         "x-coord": "2096",
         "y-coord": "1996"
     },
-    "pseudo-std": {
-        #Very little information for this star 
-        "ra": None,
-        "dec": None,
-        "e(b-v)": None,
-        "name": "pseudo-std",
-        "x-coord": "1489",
-        "y-coord": "1517"
-        }
 }
 
+# all cepheid and standard catalogues for each night
 ALL_CATALOGUES = {
     "2025-09-22": {
         "cepheids": cepheid_catalogue_2025_09_22,

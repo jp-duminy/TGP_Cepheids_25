@@ -1,4 +1,20 @@
-import numpy as np
+"""
+author: @david
+
+TGP Cepheids 25-26
+
+Andromeda V & B filter conversions.
+
+We did not have time to get all our Andromeda data and what we collected was not good, so this was never used.
+
+(I think it also mistakenly assumes we have the u filter on LT data which we do not)
+
+Perhaps future generations will find its echoes useful.
+"""
+
+# default packages
+import numpy as np # the one-package wonder
+
 class AndromedaFilterCorrection:
 
     """Photometric data from Liverpool comes in the ugriz filter

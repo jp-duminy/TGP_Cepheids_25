@@ -1,13 +1,17 @@
 """
-Distance inference to Andromeda via Cepheid CV1 TGP 25/26
 @author: jp
+
+TGP Cepheids 25-26
+
+Resamples from P-L & M31 CV1 chains to create a rigorous posterior distance measurement.
 """
 
+# default packages
 import numpy as np
 from matplotlib import pyplot as plt
 from pathlib import Path
 
-from andromeda_plots import plot_distance_posterior, plot_on_pl_relation, plot_light_curve
+from model_fitting.andromeda_plots import plot_distance_posterior, plot_on_pl_relation, plot_light_curve
 
 import scienceplots
 

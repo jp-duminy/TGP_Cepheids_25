@@ -1,3 +1,19 @@
+"""
+author: @jp
+
+TGP Cepheids 25-26
+
+These are just some helper functions I made at the very start of the project. 
+
+I ended up running with them because it is convenient but found out at the end of the project that
+MJD can actually just come straight from the .fits headers (I was working in ISOT). It is not really worth
+refactoring the code to account for this.
+
+Ignore the magnitude error function.
+
+"""
+
+# default packages
 import numpy as np
 from astropy.time import Time
 

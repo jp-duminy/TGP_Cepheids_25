@@ -1,3 +1,16 @@
+"""
+author: @jp
+
+TGP Cepheids 25-26
+
+Full data reduction pipeline. This is a fire-and-forget function. It will print diagnostics as it toils away,
+then at the end you will see plots of all of your reduced images. Reduction is scientifically straightforward
+but what can make the cepheids TGP more complicated is you have much more data than other groups, which poses
+an extra logistical challenge. To that end we have the data manager class and the calibration mapping, you can
+check the diagnostics to make sure these are working correctly (they do).
+
+"""
+# default packages
 import numpy as np
 from astropy.io import fits
 from pathlib import Path

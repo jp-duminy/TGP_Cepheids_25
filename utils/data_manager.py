@@ -1,3 +1,14 @@
+"""
+authors: @jp, @claude
+
+TGP Cepheids 25-26
+
+This is just a function to transform the per-night photometry data (from photometry_per_night.py) into
+per-cepheid photometry, which is what run_period_fit.py will expect. This is just a data mapping and 
+logistics problem so I got Claude to do most of this (manually checked the transformations, they work).
+
+"""
+# default packages
 import pandas as pd
 from pathlib import Path
 

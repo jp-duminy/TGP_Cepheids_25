@@ -1,4 +1,7 @@
 """
+author: @jp
+
+TGP Cepheids 25-26
 
 Sometimes an image is clearly flipped but the FLIPSTAT does not reflect this.
 

@@ -7,13 +7,15 @@ Useful diagnostic.
 
 """
 
+# default packages
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from astropy.time import Time
-from general_functions import Astro_Functions
-
 import scienceplots
+
+# our packages
+from utils.general_functions import Astro_Functions
 
 plt.style.use('science')
 plt.rcParams['text.usetex'] = False # this avoids an annoying latex installation

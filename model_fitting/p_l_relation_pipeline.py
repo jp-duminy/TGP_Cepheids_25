@@ -1,19 +1,36 @@
 """
-Hierarchical Period-Luminosity Relation for Cepheids TGP 25/26
 @author: jp
+
+TGP Cepheids 25-26
+
+The crème de la crème of the project. We now take all the cepheid chains (make sure to trim the directory to remove
+the cepheids you do not want) and resample from them, using a hierarchical ln likelihood to marginalise over all cepheids.
+Cepheids with better-converged posteriors and more well-constrained parameters weigh the fit more heavily.
+
+The beauty of this is the hierarchical implemenation is very similar to the emcee implementation for the period fitting. You
+then randomly resample from the chains and are in effect just adding an extra level to the likelihood function (programmatically).
+Even though MCMC fitting is more complex and harder to implement for the period fitting, the propagation of an entire chain as 
+opposed to a frequentist chi-squares fixed value means all the information about each cepheid is carried forward into the P-L chain.
+This means errors are automatically propagated into the model. And then, the lovely thing about this is that you can then store the
+P-L chain and reuse it with the Andromeda CV1 period chain to compute the distance modulus for CV1, thus deriving the  distance measurment
+to the Andromeda galaxy. Everything carries forward: the model is robust, flexible and defensible. 
+
+I am so proud of this code. 
 """
 
+# default packages
 import numpy as np
 import scipy
 import emcee as mc
 from matplotlib import pyplot as plt
-from general_functions import Astro_Functions
 import corner
-
-from distance_catalogues import cepheid_distances, cepheid_simbad_distances, cepheid_vizier_distances
 import pandas as pd
 from pathlib import Path
-from run_period_fit import Finder
+
+# our packages
+from model_fitting.run_period_fit import Finder
+from utils.general_functions import Astro_Functions
+from utils.distance_catalogues import cepheid_distances, cepheid_simbad_distances, cepheid_vizier_distances
 
 output_path = "/storage/teaching/TelescopeGroupProject/2025-26/student-work/Cepheids/Analysis/PLRelationChain"
 
@@ -60,7 +77,7 @@ class PLRelation:
         """
         a, b, sigma = theta
         if -5 < a < 5 and -10 < b < 10 and 0.01 < sigma < 0.3: # broad, uninformed priors that take reasonable values 
-            return -np.log(sigma) # flat prior
+            return -np.log(sigma) # not a flat prior: scatter is hard to model with our sampling, so penalise extreme scatter values
         return -np.inf # prior is outside of expected range
     
     def hierarchical_ln_likelihood(self, theta):
@@ -114,6 +131,7 @@ class PLRelation:
         """
 
         ndim = 3 # number of dimensions
+        # I added slightly more walkers to be rigorous
         nwalkers = 50 # numbers of walkers to explore parameter space
 
         pos = self.pl_walker_initialisation(nwalkers, ndim)
@@ -122,19 +140,20 @@ class PLRelation:
 
         # first allow walkers to explore parameter space
         print(f"Running burn-in for P-L Relation...")
-        pos = sampler.run_mcmc(pos, 1000) # small burn-in of 100 steps
+        pos = sampler.run_mcmc(pos, 1000) # relatively-large burn in, but again this is the focal point of the project
         print(f"Burn-in complete.")
         sampler.reset() # reset sampler before main chain
 
         # with walkers settled in, run the main chain
         print(f"Running production...")
+        # the chain can be shorter if you so desire but this is not too computationally expensive
         sampler.run_mcmc(pos, 5000, progress=True) # progress=True generates a progress bar
 
         self.sampler = sampler # keep sampler for analysis of quality of chain
 
         try:
             tau = self.sampler.get_autocorr_time()
-            thin = int(np.mean(tau) / 2) # thinning helps speed up computing
+            thin = int(np.mean(tau) / 2) # thinning is recommended by emcee readthedocs (and the tutorial I used)
         except mc.autocorr.AutocorrError:
             print("Warning: chain too short for reliable autocorrelation estimate. Using fixed thin=10.")
             thin = 10 
@@ -145,6 +164,7 @@ class PLRelation:
         np.save(chain_filename, self.flat_samples)
         print(f"P-L chain saved to {chain_filename}")
 
+        # save metadata again to avoid the hassle of remembering things
         metadata = {
             'model': 'PL_relation',
             'n_params': ndim,
@@ -162,7 +182,7 @@ class PLRelation:
             for key, value in metadata.items():
                 f.write(f"{key}: {value}\n")
 
-        quantiles = [16, 50, 84]  # 0.025-0.975 is ~ 2σ gaussian error
+        quantiles = [16, 50, 84]  # one sigma error
         lower, median, upper = np.percentile(self.flat_samples, quantiles, axis=0)
 
         # the median (0.5) summarises the central tendency of the posterior distribution
@@ -205,83 +225,14 @@ class PLRelation:
             title_fmt=".3f"
             ) 
         plt.show()
-    """
-    def pl_plot_emcee_fit(self):
-        fig, ax = plt.subplots()
 
-        # generate some plotting data
-        all_periods = np.concatenate(self.period_posteriors)
-        all_mags = np.concatenate(self.magnitude_posteriors)
-
-        ax.scatter(np.log10(all_periods), all_mags, alpha=0.3, s=10,
-               label='Posterior Samples', color='gray')
-
-        median_periods = [np.median(p) for p in self.period_posteriors]
-        median_mags = [np.median(m) for m in self.magnitude_posteriors]
-        ax.errorbar(np.log10(median_periods), median_mags, fmt='o',
-                label='Median Values for Each Cepheid', color='black', markersize=8)
-
-        period_range = np.linspace(min(median_periods)*0.9, max(median_periods)*1.1, 100)
-        M_fit = self.pl_model(period_range, self.a0, self.b0)
-        ax.plot(np.log10(period_range), M_fit, 'r-', linewidth=2,
-            label=f'Fit: M = {self.a0:.2f}(log P - 1) + {self.b0:.2f}')
-
-        ax.set_xlabel('log₁₀(Period) [days]')
-        ax.set_ylabel('Absolute Magnitude')
-        ax.legend()
-        ax.invert_yaxis()
-        ax.grid(True, alpha=0.3)
-        ax.set_title('Emcee Period-Luminosity Relation Fit')
-        plt.show()
-    """
-    """
-    def pl_plot_emcee_fit(self):
-
-        fig, ax = plt.subplots()
-
-        colors = plt.cm.tab20(np.linspace(0, 1, len(self.objects)))
-
-        for i in range(len(self.objects)):
-            ax.scatter(np.log10(self.period_posteriors[i]), self.magnitude_posteriors[i],
-                    alpha=0.1, s=5, color=colors[i])
-
-            med_p = np.median(self.period_posteriors[i])
-            med_m = np.median(self.magnitude_posteriors[i])
-            ax.errorbar(np.log10(med_p), med_m, fmt='o', color=colors[i],
-                        markersize=8, markeredgecolor='black', markeredgewidth=0.5,
-                        label=self.names[i])
-
-        # fit line with uncertainty bands
-        all_median_periods = [np.median(p) for p in self.period_posteriors]
-        period_range = np.linspace(min(all_median_periods) * 0.9, max(all_median_periods) * 1.1, 100)
-        log_p = np.log10(period_range)
-
-        # sample from posterior to get spread
-        draw = np.random.randint(0, len(self.flat_samples), size=200)
-        models = np.array([self.pl_model(period_range, self.flat_samples[d, 0], self.flat_samples[d, 1])
-                        for d in draw])
-
-        med_model = np.median(models, axis=0)
-        spread = np.std(models, axis=0)
-
-        ax.plot(log_p, med_model, 'r-', linewidth=2,
-                label=f'Fit: M = {self.a0:.2f}(log P - 1) {self.b0:.2f}')
-        ax.fill_between(log_p, med_model - spread, med_model + spread,
-                        color='gray', alpha=0.4, label=r'$1\sigma$')
-        ax.fill_between(log_p, med_model - 2*spread, med_model + 2*spread,
-                        color='gray', alpha=0.2, label=r'$2\sigma$')
-
-        ax.set_xlabel(r'$\log_{10}$(Period) [days]')
-        ax.set_ylabel('Absolute Magnitude')
-        ax.legend(fontsize=7, ncol=2)
-        ax.invert_yaxis()
-        ax.grid(True, alpha=0.3)
-        ax.set_title('Period-Luminosity Relation')
-        plt.show()
-    """
     def pl_plot_emcee_fit(self):
         """
         Plot the P-L relation with residuals.
+
+        Outputs a lovely plot, very scientific.
+
+        Claude did a lot of the 'fancifying' work on this plotting function (e.g. the residuals plot).
         """
         fig, (ax, ax_res) = plt.subplots(2, 1, figsize=(8, 6),
                                         gridspec_kw={'height_ratios': [3, 1]},
@@ -354,6 +305,8 @@ class PLRelation:
     def print_results(self):
         """
         Print fitted P-L relation parameters.
+
+        Useful diagnostic tool!
         """
         print(f"\n{'='*60}")
         print(f"Period-Luminosity Relation Results")
@@ -421,3 +374,13 @@ if __name__ == "__main__":
     pl.pl_plot_corner()
     pl.pl_plot_emcee_fit()
     pl.print_results()
+
+
+"""
+I do not know how long I spent on the TGP but I would estimate ~300-350 hours. My job in the group was originally just to do the model
+fitting so I did a full literature review and then set myself the challenge of going above and beyond to make a very robust, rigorous
+model fitting system because I wanted to make my group proud. I can recall the feeling of relief and bliss that washed over me when
+I finally got photometry working and the model fitting worked first try!
+
+One of the coolest things I've had the pleasure of doing in my short, undergraduate academic career thus far.
+"""

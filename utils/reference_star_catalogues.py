@@ -1,3 +1,15 @@
+"""
+authors: @mimi, @david
+
+TGP Cepheids 25-26
+
+Define the five bright reference star pixel coordinates on the reference night (2025-10-06).
+
+Photometry functions and orientation catalogues then handle the rotations and translations. You only
+need to mark reference stars on one night and can automate the rest, as long as the cepheid in each
+image is marked on every night.
+"""
+
 reference_catalogue = {
     "01": {  # ex: MW Cyg
         "ref1": {"x-coord": "1822.2847", "y-coord": "1935.9641", "V_true": "10.81"}, 

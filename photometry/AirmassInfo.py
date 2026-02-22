@@ -1,3 +1,14 @@
+"""
+
+author: @harsha
+
+TGP Cepheids 25-26
+
+Extracts airmass info from fits headers through trigonometry.
+
+"""
+
+# default packages
 import os
 from pyclbr import Class
 from astropy.io import fits

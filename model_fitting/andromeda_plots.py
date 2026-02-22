@@ -1,11 +1,12 @@
 """
-Publication-quality plotting functions for Andromeda CV1 distance inference.
-Style matched to the P-L relation plots.
 @author: jp
+
+TGP Cepheids 25-26
 
 This is entirely made by Claude, alas I do not have time to fancify plots myself.
 """
 
+# default packages
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
@@ -122,6 +123,7 @@ def plot_on_pl_relation(period_samples, M_samples, pl_chain,
         fig.savefig('andromeda_pl_relation.pdf', dpi=300, bbox_inches='tight')
     plt.show()
 
+# I did not use this (used my lightcurves.py functions, but I left it here in case.)
 def plot_light_curve(mjd, V_mag, V_err, period=None, savefig=False):
     """
     Publication-quality light curve. If period is given, also shows phased version.

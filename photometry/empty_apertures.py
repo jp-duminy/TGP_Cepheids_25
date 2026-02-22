@@ -1,3 +1,16 @@
+"""
+
+@author: jp
+
+TGP Cepheids 25-26
+
+This is a basic script to put an aperture on a random part of the sky in an image. This lets you check the 
+instrumental magnitude of an empty aperture, i.e. an empirical error estimate.
+
+Was useful for Andromeda.
+
+"""
+
 from astropy.io import fits
 from photutils.aperture import CircularAperture, CircularAnnulus, aperture_photometry
 import numpy as np
